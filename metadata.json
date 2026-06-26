@@ -1,0 +1,6 @@
+{
+  "name": "Teatro de Conflito do Prata: 2034",
+  "description": "Jogo de estratégia geopolítica por turnos no cenário sul-americano de 2034, envolvendo diplomacia, controle de regiões e simulação tática.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,360 @@
+[
+  {
+    "id": "EVT_01",
+    "title": "Invasão do Setor de Transmissão 4 em Itaipu",
+    "description": "Milícias paraguaias dissidentes infiltraram-se e bloquearam as turbinas secundárias da Usina Bi-Nacional de Itaipu. Eles exigem a revisão imediata do Tratado Energético ou ameaçam desligar a rede de transmissão para o Sudeste brasileiro.",
+    "image": "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&q=80&w=400",
+    "category": "MILITAR",
+    "choices": [
+      {
+        "id": "EVT_01_A",
+        "text": "Autorizar Ofensiva das Forças Especiais do Comandante Cavalcanti",
+        "requirementsDescription": "Exige 50 Unidades de Suprimentos para a equipe tática",
+        "consequencesDescription": "Consome suprimentos. Sucesso tático imediato garante controle e eleva a moral militar em Itaipu, mas piora severamente as relações com a Junta do Paraguai (-20).",
+        "requiredSupplies": 50,
+        "effect": {
+          "suppliesChange": -50,
+          "energyChange": 60,
+          "nationalMoraleChange": 5,
+          "moraleChange": { "ITAIPU": 15 },
+          "troopsChange": { "ITAIPU": -2 },
+          "relationChange": { "PARAGUAI": -25 },
+          "logMessage": "As forças especiais retomaram o Setor 4 de Itaipu com sucesso, restabelecendo a energia, mas as chamas diplomáticas com Assunção se intensificaram."
+        }
+      },
+      {
+        "id": "EVT_01_B",
+        "text": "Negociar Subsídios com os Dissidentes de Fronteira",
+        "requirementsDescription": "Custa 30 Fundos Geopolíticos",
+        "consequencesDescription": "Consome fundos geopolíticos. Melhora relações com o Paraguai (+15) e evita mortes. Contudo, enfraquece a moral nacional em Brasília (-10) por 'ceder a provocações'.",
+        "requiredFunds": 30,
+        "effect": {
+          "fundsChange": -30,
+          "energyChange": 30,
+          "nationalMoraleChange": -10,
+          "moraleChange": { "ITAIPU": -5, "BRASILIA": -10 },
+          "relationChange": { "PARAGUAI": 15 },
+          "logMessage": "O Brasil pagou subsídios à milícia. A rede foi reativada pacificamente, mas a opinião pública em Brasília criticou severamente a postura leniente do Comando."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_02",
+    "title": "Sabotagem no Gasoduto de MS",
+    "description": "Agentes infiltrados do Sindicato Livre sabotaram um entroncamento tático de gás natural no Mato Grosso do Sul. A pressão caiu bruscamente e as frotas de blindados estão sem combustível para deslocamentos estratégicos na fronteira sul.",
+    "image": "https://images.unsplash.com/photo-1518152006812-edab29b069ac?auto=format&fit=crop&q=80&w=400",
+    "category": "INFRAESTRUTURA",
+    "choices": [
+      {
+        "id": "EVT_02_A",
+        "text": "Alocar Engenheiros de Campanha e Fundos para Reparação Rápida",
+        "requirementsDescription": "Custa 20 Fundos Geopolíticos e 20 Suprimentos",
+        "consequencesDescription": "Restaura instantaneamente a logística local de suprimentos. Evita queda drástica na moral do Mato Grosso do Sul.",
+        "requiredFunds": 20,
+        "requiredSupplies": 20,
+        "effect": {
+          "fundsChange": -20,
+          "suppliesChange": 40,
+          "moraleChange": { "MATO_GROSSO_SUL": 10 },
+          "logMessage": "Equipes de engenharia civil tática restauraram o gasoduto tático de MS. Os blindados já estão operacionais e a moral local subiu."
+        }
+      },
+      {
+        "id": "EVT_02_B",
+        "text": "Ignorar Reparação e Racionar Suprimentos Militares",
+        "requirementsDescription": "Sem custo de fundos",
+        "consequencesDescription": "Não consome fundos imediatos, mas reduz severamente a moral em MS (-20) e retira 15 de suprimentos das reservas nacionais devido à perda por vazamentos.",
+        "effect": {
+          "suppliesChange": -15,
+          "moraleChange": { "MATO_GROSSO_SUL": -20 },
+          "troopsChange": { "MATO_GROSSO_SUL": -3 },
+          "logMessage": "O descaso com o gasoduto de MS causou indignação entre os fazendeiros e comandantes de base. Três brigadas de infantaria mecanizada ficaram desmobilizadas."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_03",
+    "title": "Bloqueio Sindical na Ponte da Amizade",
+    "description": "Uma greve orquestrada por sindicatos de escoamento e transportadoras bloqueou a Ponte Internacional da Amizade em Ciudad del Este. Nenhuma provisão tática ou mercadoria militar consegue transitar entre Foz do Iguaçu e o Paraguai.",
+    "image": "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=400",
+    "category": "DIPLOMATICO",
+    "choices": [
+      {
+        "id": "EVT_03_A",
+        "text": "Oferecer Subsídios Comerciais às Transportadoras",
+        "requirementsDescription": "Custa 40 Fundos Geopolíticos",
+        "consequencesDescription": "Dissolve o bloqueio imediatamente. Melhora a moral em Foz do Iguaçu (+10) e assegura o tráfego regular.",
+        "requiredFunds": 40,
+        "effect": {
+          "fundsChange": -40,
+          "suppliesChange": 50,
+          "moraleChange": { "FOZ_DO_IGUACU": 15, "CIUDAD_DEL_ESTE": 10 },
+          "relationChange": { "PARAGUAI": 10 },
+          "logMessage": "Os subsídios foram pagos e a Ponte da Amizade foi reaberta. A circulação de bens e suprimentos táticos foi restabelecida com êxito."
+        }
+      },
+      {
+        "id": "EVT_03_B",
+        "text": "Forçar Bloqueio Recíproco de Mercadorias e Energia",
+        "requirementsDescription": "Exige 50 GW/h de excedente Energético para amortecer perdas industriais",
+        "consequencesDescription": "Gera profunda raiva em Ciudad del Este (-20) e Assunção (-15), mas economiza fundos e consolida a autoridade da guarnição em Foz (+15).",
+        "requiredEnergy": 50,
+        "effect": {
+          "energyChange": -50,
+          "relationChange": { "PARAGUAI": -20 },
+          "moraleChange": { "FOZ_DO_IGUACU": 10, "CIUDAD_DEL_ESTE": -25 },
+          "logMessage": "O contra-bloqueio brasileiro estrangulou Ciudad del Este economicamente. A tensão com a Junta Paraguaia disparou aos maiores níveis históricos."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_04",
+    "title": "A Proposta Sombria do Sindicato Víbora",
+    "description": "A infame negociadora Diana 'Víbora' de Alencar, do Sindicato Livre dos Remanescentes, contatou secretamente o gabinete político do Brasil em Brasília. Ela oferece ceder coordenadas secretas e códigos cibernéticos de Ciudad del Este em troca de fundos estatais.",
+    "image": "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=400",
+    "category": "REMANCENTES",
+    "choices": [
+      {
+        "id": "EVT_04_A",
+        "text": "Autorizar Compra de Inteligência Tecnológica",
+        "requirementsDescription": "Custa 50 Fundos Geopolíticos",
+        "consequencesDescription": "Adquire inteligência vital. Aumenta a agressividade e prepara o exército em Foz do Iguaçu (adiciona +5 tropas grátis em Foz) e melhora a sintonia com os Mercenários (+25).",
+        "requiredFunds": 50,
+        "effect": {
+          "fundsChange": -50,
+          "moraleChange": { "FOZ_DO_IGUACU": 10 },
+          "troopsChange": { "FOZ_DO_IGUACU": 5 },
+          "relationChange": { "MERCENARIOS": 30 },
+          "logMessage": "Compramos os relatórios táticos da 'Víbora'. Cinco brigadas de elite foram imediatamente mobilizadas para o fronte de Foz do Iguaçu graças aos dados ciberoperacionais."
+        }
+      },
+      {
+        "id": "EVT_04_B",
+        "text": "Denunciar Publicamente Comércio Ilícito dos Mercenários",
+        "requirementsDescription": "Sem custo de recursos",
+        "consequencesDescription": "Melhora a moral nacional do Brasil em Brasília (+15) como um bastião de ética. Contudo, enfurece o Sindicato Livre de Diana de Alencar (-30 de relacionamento).",
+        "effect": {
+          "nationalMoraleChange": 15,
+          "relationChange": { "MERCENARIOS": -35 },
+          "moraleChange": { "BRASILIA": 15 },
+          "logMessage": "A denúncia bombástica de Brasília desestabilizou o Sindicato de Diana. Nosso patriotismo em Brasília brilha, mas os Mercenários decretaram boicote contra nós."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_05",
+    "title": "Invasão Silenciosa das Colunas do Chaco",
+    "description": "Patrulhas táticas de fronteira indicam que blindados leves do General Alexei Benítez avançaram nos quadrantes não-demarcados próximos ao sul de MS. Eles buscam reabastecer suprimentos diretamente de nossos territórios logísticos.",
+    "image": "https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?auto=format&fit=crop&q=80&w=400",
+    "category": "MILITAR",
+    "choices": [
+      {
+        "id": "EVT_05_A",
+        "text": "Forçar Confrontação Armada com Retaliação Maciça",
+        "requirementsDescription": "Exige 60 de Força em Suprimentos para guerra ativa",
+        "consequencesDescription": "Mutila a ameaça móvel do Chaco e demonstra força inflexível. Porém, o relacionamento com a Coalizão cai de vez (-25) e tropas brasileiras sofrem baixas secundárias.",
+        "requiredSupplies": 60,
+        "effect": {
+          "suppliesChange": -60,
+          "nationalMoraleChange": 10,
+          "relationChange": { "COALIZAO_CHACO": -30 },
+          "troopsChange": { "MATO_GROSSO_SUL": -3 },
+          "logMessage": "Forças blindadas de patrulha esmagaram as brigadas intrusas do Chaco. Consolidamos o Mato Grosso do Sul, mas a zona do Chaco declarou inimizade total."
+        }
+      },
+      {
+        "id": "EVT_05_B",
+        "text": "Oferecer um Acordo Logístico Provisório com Benítez",
+        "requirementsDescription": "Custa 30 de Suprimentos para a comitiva pacífica",
+        "consequencesDescription": "Cede suprimentos de boa vontade. Melhora acentuadamente as relações com a Coalizão do Chaco (+20), embora descontentando levemente as tropas de MS que se sentem expostas.",
+        "requiredSupplies": 30,
+        "effect": {
+          "suppliesChange": -30,
+          "relationChange": { "COALIZAO_CHACO": 25 },
+          "moraleChange": { "MATO_GROSSO_SUL": -10 },
+          "logMessage": "O Comandante entregou as 30 mil toneladas de provisões que Benítez queria. As rações pacificaram as tropas do Chaco, mas os homens de MS desaprovam."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_06",
+    "title": "Vazamento Biônico de Óleo no Rio Paraná",
+    "description": "Um reator secundário de refrigeração na área sob domínio paraguaio despejou milhares de litros de lubrificante químico sintético altamente tóxico no leito do Rio Paraná. As guarnições de Foz e Itaipu estão enfrentando escassez de água potável resfriadora.",
+    "image": "https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?auto=format&fit=crop&q=80&w=400",
+    "category": "INFRAESTRUTURA",
+    "choices": [
+      {
+        "id": "EVT_06_A",
+        "text": "Ativar Protocolo de Contenção Ecológica Federal",
+        "requirementsDescription": "Custa 35 de Fundos e 30 de Energia",
+        "consequencesDescription": "Restaura os filtros de água nacionais e purifica Itaipu. Eleva a confiança ecológica da população civil em Itaipu (+15).",
+        "requiredFunds": 35,
+        "requiredEnergy": 30,
+        "effect": {
+          "fundsChange": -35,
+          "energyChange": -30,
+          "moraleChange": { "ITAIPU": 20, "FOZ_DO_IGUACU": 10 },
+          "logMessage": "O Governo injetou polímeros neutralizantes nas comportas de Itaipu. O rio foi despoluído, salvaguardando a integridade das instalações hidráulicas."
+        }
+      },
+      {
+        "id": "EVT_06_B",
+        "text": "Culpar Publicamente e Coagir Economias de Assunção",
+        "requirementsDescription": "Sem custo financeiro",
+        "consequencesDescription": "Gera ressentimento, despenca a moral e energia em Itaipu (-15) e piora as relações com Paraguai (-20).",
+        "effect": {
+          "moraleChange": { "ITAIPU": -15, "FOZ_DO_IGUACU": -15 },
+          "relationChange": { "PARAGUAI": -15 },
+          "logMessage": "O Brasil acusou Assunção do colapso ecológico. O Paraguai respondeu com insultos cibernéticos e o abastecimento d'água das nossas tropas continuou estagnado."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_07",
+    "title": "Instabilidade Social em Brasília",
+    "description": "Protestos em massa contra os custos bélicos da campanha de Prata reúnem-se na Esplanada dos Ministérios, em Brasília. A ala civil exige o redirecionamento imediato de recursos estratégicos e corte nos subsídios militares de fronteira.",
+    "image": "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=400",
+    "category": "DIPLOMATICO",
+    "choices": [
+      {
+        "id": "EVT_07_A",
+        "text": "Redirecionar Linha de Subsídios para o Fundo Civil",
+        "requirementsDescription": "Custa um corte imediato de 50 suprimentos militares de campanha",
+        "consequencesDescription": "Diminui temporariamente a eficiência tática de defesa, mas recupera estabilidade emocional civil em Brasília (+20) e eleva a satisfação em Mato Grosso do Sul (+10).",
+        "requiredSupplies": 50,
+        "effect": {
+          "suppliesChange": -50,
+          "nationalMoraleChange": 15,
+          "moraleChange": { "BRASILIA": 20, "MATO_GROSSO_SUL": 10 },
+          "logMessage": "Os suprimentos militares foram racionados para acalmar as ruas de Brasília. A população comemora a concessão civil, mas os marechais nos alertam sobre o risco defensivo."
+        }
+      },
+      {
+        "id": "EVT_07_B",
+        "text": "Decretar Toque de Recolher com Discursos de Emergência de Defesa",
+        "requirementsDescription": "Custa 20 de Fundos em patrulhas civis",
+        "consequencesDescription": "Enrijece a ordem militar e impede perda de suprimentos, mantendo a agressividade no máximo, mas causa revolta na população civil local.",
+        "requiredFunds": 20,
+        "effect": {
+          "fundsChange": -20,
+          "nationalMoraleChange": -10,
+          "moraleChange": { "BRASILIA": -15 },
+          "logMessage": "A Polícia Militarizada assumiu o controle das avenidas em Brasília sob a Lei Marcial de Prata. As ruas silenciaram-se em raiva profunda."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_08",
+    "title": "A Conspiração do Embaixador Franco",
+    "description": "O embaixador opositor do Paraguai, Hugo 'Cérebro' Franco, contatou nossos canais oferecendo um pacto secreto de desarmamento parcial em Ciudad del Este, se apoiarmos uma ala reformista interna no exército paraguaio.",
+    "image": "https://images.unsplash.com/photo-1521791136364-7286bc00029a?auto=format&fit=crop&q=80&w=400",
+    "category": "DIPLOMATICO",
+    "choices": [
+      {
+        "id": "EVT_08_A",
+        "text": "Financiar a Oposição Moderada de Franco",
+        "requirementsDescription": "Exige 45 Fundos Geopolíticos",
+        "consequencesDescription": "Financiamento de propaganda. Restabelece de forma drástica as relações com o Paraguai (+25) e diminui voluntariamente a força militar inimiga na fronteira.",
+        "requiredFunds": 45,
+        "effect": {
+          "fundsChange": -45,
+          "relationChange": { "PARAGUAI": 35 },
+          "moraleChange": { "CIUDAD_DEL_ESTE": 15 },
+          "logMessage": "Nossos fundos irrigaram as redes secretas de Hugo Franco. O sentimento moderado em Ciudad del Este cresceu e as tensões no Paraná arrefeceram."
+        }
+      },
+      {
+        "id": "EVT_08_B",
+        "text": "Ignorar e Reportar a Proposta de Conspiração a Solano",
+        "requirementsDescription": "Sem custo",
+        "consequencesDescription": "Ao expor Hugo Franco, ganhamos respeito parcial de Solano Díaz por defender princípios de soberania, mas perdemos nossa melhor chance de infiltrar espiões na retaguarda.",
+        "effect": {
+          "relationChange": { "PARAGUAI": 15 },
+          "nationalMoraleChange": 5,
+          "moraleChange": { "ASSUNCAO": -10 },
+          "logMessage": "O Brasil denunciou a conspiração de Franco ao próprio Solano Díaz, que fuzilou os reformistas. O Paraguai respeita nossa decência diplomática, mas agora está em alerta máximo."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_09",
+    "title": "A Descoberta da Reserva Geológica de Trítio-3 no Chaco",
+    "description": "Geólogos que operavam na bacia árida do Chaco encontraram depósitos gigantescos de fósseis enriquecidos e Trítio-3, material raro que pode turbinar os geradores energéticos do Brasil em 300% por anos.",
+    "image": "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&q=80&w=400",
+    "category": "REMANCENTES",
+    "choices": [
+      {
+        "id": "EVT_09_A",
+        "text": "Comprar Direitos Geológicos Exclusivos de Benítez",
+        "requirementsDescription": "Custa 70 Fundos Geopolíticos",
+        "consequencesDescription": "Investimento maciço. Cria um boom elétrico colossal de longo prazo (+150 Energia) e sela amizade leal com o Chaco.",
+        "requiredFunds": 70,
+        "effect": {
+          "fundsChange": -70,
+          "energyChange": 150,
+          "relationChange": { "COALIZAO_CHACO": 35 },
+          "logMessage": "Com abundância de fundos, o Brasil comprou a totalidade dos poços de Trítio-3 das frotas do Chaco. Nossa rede de energia recebeu carga máxima inédita!"
+        }
+      },
+      {
+        "id": "EVT_09_B",
+        "text": "Deslocar Brigadas para Coagir e Extrair sem Pagar",
+        "requirementsDescription": "Exige 50 Tropas no Mato Grosso do Sul para garantir a intimidação física",
+        "consequencesDescription": "Rouba os minérios usando poderio bruto. Enche nossos tanques sociais sem gastar fundos, mas gera ódio instantâneo no Chaco (-45) e em Assunção.",
+        "effect": {
+          "energyChange": 75,
+          "suppliesChange": 40,
+          "relationChange": { "COALIZAO_CHACO": -40 },
+          "moraleChange": { "CHACO": -30, "MATO_GROSSO_SUL": -10 },
+          "logMessage": "Sob as miras de nossos tanques em MS, as milícias do Chaco entregaram as minas de Trítio. Conseguimos a energia e suprimentos de graça, mas o Chaco jurou vingança sangrenta."
+        }
+      }
+    ]
+  },
+  {
+    "id": "EVT_10",
+    "title": "A Aliança de Três Lados em San Alberto",
+    "description": "As frentes do Sindicato Livre das Víboras e generais do Paraguai marcaram uma assembleia militar em San Alberto para unificar suas redes táticas contra a hegemonia brasileira sobre Itaipu. Se concluível, o cerco à usina será iminente.",
+    "image": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&q=80&w=400",
+    "category": "MILITAR",
+    "choices": [
+      {
+        "id": "EVT_10_A",
+        "text": "Executar Operação 'Fogo Cerrado' com Mísseis Balísticos",
+        "requirementsDescription": "Exige gastar 50 Fundos Geopolíticos e 80 Suprimentos em foguetes guiados",
+        "consequencesDescription": "Esmaga a unificação inimiga aniquilando a liderança conspiradora. Diminui tropas paraguaias de forma contundente (-10 tropas do Paraguai em Assunção/CDE). No entanto, deprime a moral pública nacional e destrói as relações com os Mercenários.",
+        "requiredFunds": 50,
+        "requiredSupplies": 80,
+        "effect": {
+          "fundsChange": -50,
+          "suppliesChange": -80,
+          "relationChange": { "PARAGUAI": -30, "MERCENARIOS": -40 },
+          "troopsChange": { "CIUDAD_DEL_ESTE": -5, "ASSUNCAO": -5 },
+          "nationalMoraleChange": -10,
+          "logMessage": "Chuva de mísseis brasileiros varreu o galpão em San Alberto. A aliança paraguaia-mercenária foi decapitada com sucesso, mas o estrondo horrorizou diplomatas no exterior."
+        }
+      },
+      {
+        "id": "EVT_10_B",
+        "text": "Enviar Espiões de Elite para Infiltrar, Subornar e Semear Ceticismo",
+        "requirementsDescription": "Exige gastar 40 Fundos e alocar Inteligência estratégica",
+        "consequencesDescription": "Neutralização astuta de bastidores. Fratura a assembleia. Causa desconfiança mútua entre Mercenários (+15 relações brasileiras com Sindicato) e paraguaios.",
+        "requiredFunds": 40,
+        "effect": {
+          "fundsChange": -40,
+          "relationChange": { "MERCENARIOS": 20 },
+          "moraleChange": { "CIUDAD_DEL_ESTE": -10 },
+          "logMessage": "Operadores fantasmas espalharam boatos e subornaram oficiais do Sindicato Lá no encontro comercial de San Alberto. A aliança colapsou em desconfiança interna sem um único disparo tático."
+        }
+      }
+    ]
+  }
+]
