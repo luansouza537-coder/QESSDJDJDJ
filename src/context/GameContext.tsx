@@ -483,8 +483,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const defenderPower = (battle.currentDefenderTroops + defenderStrategyBonus + targetRegion.defenseRating) * (targetRegion.morale / 100) * (defenderRoll + 2);
 
       // Calcular o Dano de Combate Inicial
-      let attackerDmg = attackerPower * 0.12;
-      let defenderDmg = defenderPower * 0.12;
+      let attackerDmg = attackerPower * 0.07;
+      let defenderDmg = defenderPower * 0.07;
 
       // Aplicar modificador estrito baseado no terreno correspondente
       let terrainDescValue = '';
@@ -1380,6 +1380,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         nextTurn,
         internalLogs
       );
+
+      // 2.5 Recuperação gradual de moral regional (+2/turno) e moral nacional do jogador
+      Object.values(updatedRegions).forEach((region: Region) => {
+        region.morale = Math.min(100, region.morale + 2);
+      });
+      if (updatedFactions[prev.playerFaction] && prev.politicalStability > 50) {
+        updatedFactions[prev.playerFaction].nationalMorale = Math.min(
+          100,
+          updatedFactions[prev.playerFaction].nationalMorale + 1
+        );
+      }
 
       // 3. Processar missões de personagens brasileiros e oponentes
       const updatedCharacters = resolveCharacterMissions(prev.characters, updatedRegions, updatedFactions, internalLogs);

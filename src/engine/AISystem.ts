@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Region, Faction, RegionID, FactionID, HistoryLog, TerrainType } from '../types/game';
+import { Region, Faction, RegionID, FactionID, HistoryLog, TerrainType, UnitComposition } from '../types/game';
 
 // Configuração por dificuldade
 const AI_CONFIG = {
-  FACIL:  { rodadasPorTurno: 1, custoRecrutamento: 25, ratioMinimoAtaque: 2.0, quantidadeRecrutamento: 2 },
-  NORMAL: { rodadasPorTurno: 2, custoRecrutamento: 20, ratioMinimoAtaque: 1.5, quantidadeRecrutamento: 3 },
-  DIFICIL:{ rodadasPorTurno: 3, custoRecrutamento: 15, ratioMinimoAtaque: 1.2, quantidadeRecrutamento: 5 },
+  FACIL:  { rodadasPorTurno: 1, custoRecrutamento: 25, ratioMinimoAtaque: 2.2, quantidadeRecrutamento: 2 },
+  NORMAL: { rodadasPorTurno: 2, custoRecrutamento: 18, ratioMinimoAtaque: 1.6, quantidadeRecrutamento: 4 },
+  DIFICIL:{ rodadasPorTurno: 3, custoRecrutamento: 12, ratioMinimoAtaque: 1.3, quantidadeRecrutamento: 6 },
 };
 
 // Prioridade estratégica de cada região como alvo de ataque
@@ -71,8 +71,8 @@ function resolverCombateIA(
     const poderAtk = atkTroops * (factions[facaoAtacante].nationalMorale / 100) * (rollAtk + 2);
     const poderDef = (defTroops + alvo.defenseRating) * (alvo.morale / 100) * (rollDef + 2);
 
-    let dmgAtk = poderAtk * 0.12 * modificadorDefesa(alvo.terrain);
-    let dmgDef = poderDef * 0.12;
+    let dmgAtk = poderAtk * 0.07 * modificadorDefesa(alvo.terrain);
+    let dmgDef = poderDef * 0.07;
 
     const baixasAtk = Math.min(atkTroops, Math.max(1, Math.floor(dmgDef)));
     const baixasDef = Math.min(defTroops, Math.max(1, Math.floor(dmgAtk)));
@@ -89,6 +89,8 @@ function resolverCombateIA(
     alvo.controller = facaoAtacante;
     alvo.troops = Math.max(1, atkTroops);
     alvo.morale = Math.max(20, alvo.morale - 15);
+    // IA usa só infantaria — normaliza composição para consistência
+    alvo.composition = { INFANTARIA: alvo.troops, BLINDADOS: 0, ARTILHARIA: 0, FORCA_ESPECIAL: 0 };
 
     if (defensora) {
       defensora.nationalMorale = Math.max(0, defensora.nationalMorale - 8);
@@ -130,6 +132,18 @@ export function executarTurnoIA(
 ): void {
   const config = AI_CONFIG[difficulty];
 
+  // DIFICIL: IA recebe suporte econômico externo (simula ajuda internacional)
+  if (difficulty === 'DIFICIL') {
+    if (factions['PARAGUAI']) {
+      factions['PARAGUAI'].resources.supplies += 22;
+      factions['PARAGUAI'].resources.funds    += 10;
+    }
+    if (factions['COALIZAO_CHACO']) {
+      factions['COALIZAO_CHACO'].resources.supplies += 15;
+      factions['COALIZAO_CHACO'].resources.funds    += 6;
+    }
+  }
+
   // Lista de facções que são controladas pela IA
   const faccoesIA: FactionID[] = (Object.keys(factions) as FactionID[]).filter(
     id => id !== playerFaction && factions[id] != null
@@ -166,7 +180,11 @@ export function executarTurnoIA(
         fronteiras.sort((a, b) => a.troops - b.troops)[0] ?? regioesProprias[0];
 
       if (alvoRecrutamento) {
-        alvoRecrutamento.troops += config.quantidadeRecrutamento;
+        const qtd = config.quantidadeRecrutamento;
+        alvoRecrutamento.troops += qtd;
+        alvoRecrutamento.composition = alvoRecrutamento.composition
+          ? { ...alvoRecrutamento.composition, INFANTARIA: alvoRecrutamento.composition.INFANTARIA + qtd }
+          : { INFANTARIA: alvoRecrutamento.troops, BLINDADOS: 0, ARTILHARIA: 0, FORCA_ESPECIAL: 0 };
         faction.resources.supplies -= config.custoRecrutamento;
       }
     }
@@ -209,6 +227,9 @@ export function executarTurnoIA(
           vizId => regions[vizId] && regions[vizId].controller !== facaoId
         );
 
+        // Ignora regiões com moral muito baixa (tropas desmoralizadas não atacam)
+        if (regFront.morale < 30) continue;
+
         for (const alvoId of vizinhosInimigos) {
           const alvo = regions[alvoId];
           if (!alvo) continue;
@@ -218,12 +239,20 @@ export function executarTurnoIA(
           const ratio = forcaAtk / Math.max(1, forcaDef);
 
           if (ratio >= config.ratioMinimoAtaque) {
-            const score = ratio * VALOR_ESTRATEGICO[alvoId];
+            let score = ratio * VALOR_ESTRATEGICO[alvoId];
+            // No DIFICIL a IA prioriza especialmente regiões do jogador
+            if (difficulty === 'DIFICIL' && alvo.controller === playerFaction) {
+              score *= 1.8;
+            }
+            // No NORMAL também leve preferência pelo jogador
+            if (difficulty === 'NORMAL' && alvo.controller === playerFaction) {
+              score *= 1.25;
+            }
             candidatos.push({
               origem: regFront.id,
               alvo: alvoId,
               score,
-              tropas: Math.floor(regFront.troops * 0.6), // usa 60% das tropas no ataque
+              tropas: Math.floor(regFront.troops * (difficulty === 'DIFICIL' ? 0.70 : 0.60)),
             });
           }
         }
