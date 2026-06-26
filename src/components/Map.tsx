@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Polygon, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useGame } from '../context/GameContext';
@@ -113,6 +113,18 @@ function buildLabelIcon(
   return L.divIcon({ html, className: '', iconSize: [0, 0], iconAnchor: [0, 0] });
 }
 
+// ── Leaflet size fix ──────────────────────────────────────────────────────────
+// Forces Leaflet to re-detect container dimensions after React renders the DOM.
+// Without this, flex-grow containers resolve to 0px at Leaflet init time.
+function InvalidateOnMount() {
+  const map = useMap();
+  useEffect(() => {
+    const id = setTimeout(() => map.invalidateSize(), 50);
+    return () => clearTimeout(id);
+  }, [map]);
+  return null;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Map() {
@@ -125,7 +137,7 @@ export default function Map() {
   const provider = TILE_PROVIDERS[tileStyle];
 
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-xl relative overflow-hidden shadow-2xl flex flex-col h-full">
+    <div className="bg-slate-950 border border-slate-800 rounded-xl relative overflow-hidden shadow-2xl flex flex-col">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex justify-between items-center px-5 py-3 border-b border-slate-800 relative z-[1001] bg-slate-950/95 backdrop-blur-sm">
@@ -199,7 +211,7 @@ export default function Map() {
       </div>
 
       {/* ── Leaflet Map ─────────────────────────────────────────────────────── */}
-      <div className="flex-grow relative z-0" style={{ minHeight: '350px' }}>
+      <div style={{ height: '480px' }}>
         <MapContainer
           center={[-21, -54]}
           zoom={5}
@@ -207,6 +219,7 @@ export default function Map() {
           zoomControl
           scrollWheelZoom
         >
+          <InvalidateOnMount />
           <TileLayer
             key={tileStyle}
             url={provider.url}
