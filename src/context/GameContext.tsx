@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, ReactNode, useEffect } from 'react';
+import { GameLoop } from '../engine/GameLoop';
+import { WeatherSystem } from '../engine/WeatherSystem';
+import { EconomySystem } from '../engine/EconomySystem';
+import { criarEstadoSimulacao, regiaoParaZonaClimatica } from '../engine/SimulationBridge';
+import { EstadoJogoSimulacao, ClimaRegional } from '../types/simulation';
 import { 
   GameState, 
   FactionID, 
@@ -26,6 +31,7 @@ import { PREQUEL_EVENTS, PREQUEL_EVENTS_PARAGUAI, generateProceduralEvent } from
 
 interface GameContextProps {
   gameState: GameState;
+  weatherState: Record<string, ClimaRegional>;
   startGame: (factionId: FactionID, difficulty: 'FACIL' | 'NORMAL' | 'DIFICIL', advisor: string) => void;
   resetGame: () => void;
   advanceTurn: () => void;
@@ -67,6 +73,10 @@ export const REGION_ADJACENCY: Record<RegionID, RegionID[]> = {
 };
 
 export function GameProvider({ children }: { children: ReactNode }) {
+  const gameLoopRef = useRef<GameLoop | null>(null);
+  const simStateRef = useRef<EstadoJogoSimulacao | null>(null);
+  const [weatherState, setWeatherState] = useState<Record<string, ClimaRegional>>({});
+
   const [gameState, setGameState] = useState<GameState>(() => {
     // Estado inicial fictício até o jogo começar pelo Menu Principal
     return {
@@ -153,6 +163,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
 
   const resetGame = () => {
+    if (gameLoopRef.current) {
+      gameLoopRef.current.pausar();
+      gameLoopRef.current = null;
+      simStateRef.current = null;
+    }
     setGameState(prev => ({
       ...prev,
       currentTurn: 0,
@@ -161,6 +176,46 @@ export function GameProvider({ children }: { children: ReactNode }) {
       victoryStatus: 'JOGANDO'
     }));
   };
+
+  // Inicia o motor real-time quando a fase de guerra começa; para quando sai da guerra
+  useEffect(() => {
+    if (gameState.timelineProgress === 'GUERRA' && !gameLoopRef.current) {
+      const simState = criarEstadoSimulacao(gameState);
+      simStateRef.current = simState;
+
+      const loop = new GameLoop(simState);
+      loop.registrarSubsistema(new WeatherSystem());
+      loop.registrarSubsistema(new EconomySystem());
+
+      // Throttle: sincroniza clima com o React a cada 500ms para evitar re-renders excessivos
+      let ultimaSincronizacao = 0;
+      loop.assinarAtualizacao((estado) => {
+        const agora = performance.now();
+        if (agora - ultimaSincronizacao >= 500) {
+          ultimaSincronizacao = agora;
+          setWeatherState({ ...estado.climaGlobal });
+        }
+      });
+
+      gameLoopRef.current = loop;
+      loop.iniciar();
+    }
+
+    if (gameState.timelineProgress !== 'GUERRA' && gameLoopRef.current) {
+      gameLoopRef.current.pausar();
+      gameLoopRef.current = null;
+      simStateRef.current = null;
+    }
+  }, [gameState.timelineProgress]);
+
+  // Cleanup ao desmontar o provider
+  useEffect(() => {
+    return () => {
+      if (gameLoopRef.current) {
+        gameLoopRef.current.pausar();
+      }
+    };
+  }, []);
 
   const selectRegion = (regionId: RegionID | null) => {
     setGameState(prev => ({
@@ -357,6 +412,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
           break;
       }
 
+      // Aplicar modificadores climáticos (motor real-time)
+      const zonaClimatica = regiaoParaZonaClimatica(battle.regionId);
+      const clima = simStateRef.current?.climaGlobal[zonaClimatica];
+      let weatherDesc = '';
+      if (clima) {
+        // Visibilidade reduzida prejudica mais o atacante (avança em terreno desconhecido)
+        if (clima.visibilidadeCoeficiente < 0.5) {
+          attackerDmg *= 0.80;
+          weatherDesc = ` Condição climática (${clima.condicao}): visibilidade reduzida penaliza atacante em -20%.`;
+        }
+        // Bloqueio de radar prejudica defensor (perde vantagem de monitoramento)
+        if (clima.bloqueioRadarCoeficiente > 0.5) {
+          defenderDmg *= 0.90;
+          weatherDesc += ` Interferência eletromagnética severa: defensor perde 10% de eficácia de radar.`;
+        }
+        // Garantir que terreno + clima não ultrapassem -80% total (cap de segurança)
+        const minDmgAttacker = defenderDmg * 0.20;
+        const minDmgDefender = attackerDmg * 0.20;
+        attackerDmg = Math.max(minDmgAttacker, attackerDmg);
+        defenderDmg = Math.max(minDmgDefender, defenderDmg);
+      }
+
       // Consolidar perdas do turno
       let atkLosses = Math.min(battle.currentAttackerTroops, Math.max(1, Math.floor(defenderDmg)));
       let defLosses = Math.min(battle.currentDefenderTroops, Math.max(1, Math.floor(attackerDmg)));
@@ -370,7 +447,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const nextAtkTroops = Math.max(0, battle.currentAttackerTroops - atkLosses);
       const nextDefTroops = Math.max(0, battle.currentDefenderTroops - defLosses);
 
-      const logMsg = `Round ${nextRound}: Atacante rola [${attackerRoll}], tirando ${defLosses} baixas. Defensor rola [${defenderRoll}], abatendo ${atkLosses} brigadas.`;
+      const logMsg = `Round ${nextRound}: Atacante rola [${attackerRoll}], tirando ${defLosses} baixas. Defensor rola [${defenderRoll}], abatendo ${atkLosses} brigadas.${weatherDesc}`;
 
       const newRound: BattleRound = {
         round: nextRound,
@@ -1737,6 +1814,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   return (
     <GameContext.Provider value={{
       gameState,
+      weatherState,
       startGame,
       resetGame,
       advanceTurn,

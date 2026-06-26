@@ -5,31 +5,35 @@
 
 import React, { useRef, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import { regiaoParaZonaClimatica } from '../engine/SimulationBridge';
 import { motion } from 'motion/react';
-import { 
-  ShieldAlert, 
-  Sword, 
-  UserSquare2, 
-  CornerDownLeft, 
-  Zap, 
-  Volume2, 
-  Award, 
+import {
+  ShieldAlert,
+  Sword,
+  UserSquare2,
+  CornerDownLeft,
+  Zap,
+  Volume2,
+  Award,
   X,
   Skull,
   TrendingDown,
   Info,
-  ChevronRight
+  ChevronRight,
+  CloudRain,
+  Wind
 } from 'lucide-react';
 
 export default function ActiveBattleModal() {
-  const { 
-    gameState, 
-    executeBattleRound, 
-    retreatBattle, 
-    autoResolveBattle, 
-    closeBattleReport 
+  const {
+    gameState,
+    weatherState,
+    executeBattleRound,
+    retreatBattle,
+    autoResolveBattle,
+    closeBattleReport
   } = useGame();
-  
+
   const { activeBattle, factions, regions, characters } = gameState;
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -124,6 +128,24 @@ export default function ActiveBattleModal() {
 
   const terrainInfo = getTerrainBadge(activeBattle.terrain);
 
+  // Dados climáticos do motor real-time
+  const zonaClimatica = regiaoParaZonaClimatica(activeBattle.regionId);
+  const clima = weatherState[zonaClimatica];
+  const climaLabels: Record<string, string> = {
+    LIMPO: 'Céu Limpo',
+    CHUVA: 'Chuva',
+    TEMPESTADE: 'Tempestade',
+    NEBLINA: 'Neblina',
+    NEVE: 'Neve',
+  };
+  const climaColors: Record<string, string> = {
+    LIMPO: 'text-sky-400 border-sky-800 bg-sky-950/60',
+    CHUVA: 'text-blue-400 border-blue-800 bg-blue-950/60',
+    TEMPESTADE: 'text-red-400 border-red-800 bg-red-950/60',
+    NEBLINA: 'text-slate-400 border-slate-700 bg-slate-900/60',
+    NEVE: 'text-indigo-300 border-indigo-800 bg-indigo-950/60',
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
@@ -143,11 +165,24 @@ export default function ActiveBattleModal() {
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-mono text-slate-500 uppercase">Terreno:</span>
-            <span className="px-2 py-0.5 rounded border text-[10px] font-mono font-bold bg-slate-900 border-slate-700 text-slate-300">
-              {activeBattle.terrain}
-            </span>
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] font-mono text-slate-500 uppercase">Terreno:</span>
+              <span className="px-2 py-0.5 rounded border text-[10px] font-mono font-bold bg-slate-900 border-slate-700 text-slate-300">
+                {activeBattle.terrain}
+              </span>
+            </div>
+            {clima && (
+              <div className={`flex items-center space-x-1.5 px-2 py-0.5 rounded border text-[10px] font-mono font-bold ${climaColors[clima.condicao] ?? 'text-slate-300 border-slate-700 bg-slate-900'}`}>
+                {clima.condicao === 'TEMPESTADE' || clima.condicao === 'CHUVA' ? (
+                  <CloudRain className="w-3 h-3" />
+                ) : (
+                  <Wind className="w-3 h-3" />
+                )}
+                <span>{climaLabels[clima.condicao] ?? clima.condicao}</span>
+                <span className="text-[9px] opacity-70">{clima.temperatura.toFixed(0)}°C</span>
+              </div>
+            )}
           </div>
         </div>
 
