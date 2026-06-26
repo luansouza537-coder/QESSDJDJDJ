@@ -15,30 +15,33 @@ import ActiveBattleModal from '../components/ActiveBattleModal';
 import PrequelDashboard from '../components/PrequelDashboard';
 import EndingViewer from '../components/EndingViewer';
 import StrategicInfrastructure from '../components/StrategicInfrastructure';
-import { 
-  Zap, 
-  Coins, 
-  Package, 
-  Award, 
-  Compass, 
-  Handshake, 
-  Users, 
-  Terminal, 
+import {
+  Zap,
+  Coins,
+  Package,
+  Award,
+  Compass,
+  Handshake,
+  Users,
+  Terminal,
   ChevronRight,
   Calendar,
   Sparkles,
   ShieldAlert,
   Clock,
   BookOpen,
-  Cpu
+  Cpu,
+  TrendingUp,
+  TrendingDown,
+  BarChart2
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { gameState, advanceTurn } = useGame();
-  const { 
-    currentTurn, 
-    factions, 
-    playerFaction, 
+  const { gameState, advanceTurn, economicIndicators } = useGame();
+  const {
+    currentTurn,
+    factions,
+    playerFaction,
     victoryStatus,
     timelineProgress,
     prequelYear
@@ -146,6 +149,52 @@ export default function Dashboard() {
                   <span className="text-xs font-black text-slate-200">{playerFac?.nationalMorale || 50}%</span>
                 </div>
               </div>
+
+              {/* Indicadores Econômicos (motor real-time) */}
+              {economicIndicators && (
+                <>
+                  <div className={`px-3 py-1.5 rounded-lg bg-slate-900/40 border flex items-center space-x-2 shadow-sm ${
+                    economicIndicators.pibCrescimento >= 0
+                      ? 'border-emerald-900/60'
+                      : 'border-red-900/60'
+                  }`}>
+                    {economicIndicators.pibCrescimento >= 0
+                      ? <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      : <TrendingDown className="w-4 h-4 text-red-400" />
+                    }
+                    <div>
+                      <span className="text-[8px] text-slate-500 block uppercase leading-none">PIB</span>
+                      <span className={`text-xs font-black ${economicIndicators.pibCrescimento >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {economicIndicators.pibCrescimento >= 0 ? '+' : ''}{(economicIndicators.pibCrescimento * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={`px-3 py-1.5 rounded-lg bg-slate-900/40 border flex items-center space-x-2 shadow-sm ${
+                    economicIndicators.inflacao > 0.10
+                      ? 'border-red-900/60'
+                      : economicIndicators.inflacao > 0.06
+                        ? 'border-amber-900/60'
+                        : 'border-slate-850'
+                  }`}>
+                    <BarChart2 className={`w-4 h-4 ${
+                      economicIndicators.inflacao > 0.10 ? 'text-red-400'
+                      : economicIndicators.inflacao > 0.06 ? 'text-amber-400'
+                      : 'text-slate-400'
+                    }`} />
+                    <div>
+                      <span className="text-[8px] text-slate-500 block uppercase leading-none">Inflação</span>
+                      <span className={`text-xs font-black ${
+                        economicIndicators.inflacao > 0.10 ? 'text-red-400'
+                        : economicIndicators.inflacao > 0.06 ? 'text-amber-400'
+                        : 'text-slate-200'
+                      }`}>
+                        {(economicIndicators.inflacao * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4 font-mono">

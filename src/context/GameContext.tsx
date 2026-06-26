@@ -29,9 +29,19 @@ import { INITIAL_INFRASTRUCTURE_STATE } from '../data/infrastructureData';
 import { GEOPOLITICAL_EVENTS } from '../data/events';
 import { PREQUEL_EVENTS, PREQUEL_EVENTS_PARAGUAI, generateProceduralEvent } from '../data/campaignEvents';
 
+export interface EconomicIndicators {
+  pib: number;
+  pibCrescimento: number;
+  inflacao: number;
+  desemprego: number;
+  dividaPublica: number;
+  reservasInternacionais: number;
+}
+
 interface GameContextProps {
   gameState: GameState;
   weatherState: Record<string, ClimaRegional>;
+  economicIndicators: EconomicIndicators | null;
   startGame: (factionId: FactionID, difficulty: 'FACIL' | 'NORMAL' | 'DIFICIL', advisor: string) => void;
   resetGame: () => void;
   advanceTurn: () => void;
@@ -76,6 +86,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const gameLoopRef = useRef<GameLoop | null>(null);
   const simStateRef = useRef<EstadoJogoSimulacao | null>(null);
   const [weatherState, setWeatherState] = useState<Record<string, ClimaRegional>>({});
+  const [economicIndicators, setEconomicIndicators] = useState<EconomicIndicators | null>(null);
 
   const [gameState, setGameState] = useState<GameState>(() => {
     // Estado inicial fictício até o jogo começar pelo Menu Principal
@@ -187,13 +198,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
       loop.registrarSubsistema(new WeatherSystem());
       loop.registrarSubsistema(new EconomySystem());
 
-      // Throttle: sincroniza clima com o React a cada 500ms para evitar re-renders excessivos
+      // Throttle: sincroniza clima e economia com o React a cada 500ms para evitar re-renders excessivos
       let ultimaSincronizacao = 0;
       loop.assinarAtualizacao((estado) => {
         const agora = performance.now();
         if (agora - ultimaSincronizacao >= 500) {
           ultimaSincronizacao = agora;
           setWeatherState({ ...estado.climaGlobal });
+
+          // Expõe indicadores econômicos da facção do jogador para a UI
+          const facaoJogador = gameState.playerFaction === 'PARAGUAI' ? 'PARAGUAI' : 'BRASIL';
+          const econ = estado.facoes[facaoJogador as keyof typeof estado.facoes]?.estadoEconomico;
+          if (econ) {
+            setEconomicIndicators({
+              pib: econ.pib,
+              pibCrescimento: econ.pibCrescimento,
+              inflacao: econ.inflacao,
+              desemprego: econ.desemprego,
+              dividaPublica: econ.dividaPublica,
+              reservasInternacionais: econ.reservasInternacionais,
+            });
+          }
         }
       });
 
@@ -1102,14 +1127,90 @@ export function GameProvider({ children }: { children: ReactNode }) {
       let currentPoliticalStability = prev.politicalStability;
 
       // 1. Coleta automática de recursos por região para a facção controladora
+      // com modificadores macroeconômicos do motor real-time (EconomySystem)
+      const simEconBrasil = simStateRef.current?.facoes['BRASIL']?.estadoEconomico ?? null;
+      const simEconParaguai = simStateRef.current?.facoes['PARAGUAI']?.estadoEconomico ?? null;
+
       Object.values(updatedRegions).forEach((region: Region) => {
         const leaderFaction = region.controller;
         const faction = updatedFactions[leaderFaction];
-        
-        faction.resources.funds += region.fundsProduction;
-        faction.resources.supplies += region.supplyProduction;
+
+        const econState = leaderFaction === 'BRASIL' ? simEconBrasil
+                        : leaderFaction === 'PARAGUAI' ? simEconParaguai
+                        : null;
+
+        // Modificador de fundos: PIB crescente aumenta arrecadação, recessão corta receitas
+        let fundsModifier = 1.0;
+        // Modificador de suprimentos: inflação alta corrói o poder de compra
+        let suppliesModifier = 1.0;
+
+        if (econState) {
+          const pibBonus = Math.min(0.30, Math.max(-0.25, econState.pibCrescimento * 5));
+          fundsModifier = Math.min(1.8, Math.max(0.4, 1.0 + pibBonus));
+
+          const inflacaoExcesso = Math.max(0, econState.inflacao - 0.05); // acima de 5% base
+          suppliesModifier = Math.min(1.0, Math.max(0.5, 1.0 - inflacaoExcesso * 3));
+        }
+
+        faction.resources.funds += Math.round(region.fundsProduction * fundsModifier);
+        faction.resources.supplies += Math.round(region.supplyProduction * suppliesModifier);
         faction.resources.energy += region.energyProduction;
       });
+
+      // 1.1 Consequências macroeconômicas no moral e estabilidade política
+      const playerEcon = prev.playerFaction === 'BRASIL' ? simEconBrasil : simEconParaguai;
+      if (playerEcon) {
+        // Desemprego acima de 15% corrói apoio popular (cada ponto percentual extra = -1 apoio)
+        if (playerEcon.desemprego > 0.15) {
+          const desempregoPenalty = Math.floor((playerEcon.desemprego - 0.15) * 100);
+          currentPopularSupport = Math.max(0, currentPopularSupport - desempregoPenalty);
+          internalLogs.push({
+            id: `econ_desemprego_${nextTurn}`,
+            turn: nextTurn,
+            type: 'ECONOMIA',
+            message: `⚠️ CRISE DE EMPREGO: Desemprego em ${(playerEcon.desemprego * 100).toFixed(1)}% — tensão social aumenta, apoio popular caiu -${desempregoPenalty}.`
+          });
+        }
+
+        // Inflação acima de 10% desestabiliza o governo
+        if (playerEcon.inflacao > 0.10) {
+          const inflacaoPenalty = Math.floor((playerEcon.inflacao - 0.10) * 50);
+          currentPoliticalStability = Math.max(0, currentPoliticalStability - inflacaoPenalty);
+          internalLogs.push({
+            id: `econ_inflacao_${nextTurn}`,
+            turn: nextTurn,
+            type: 'ECONOMIA',
+            message: `🔴 INFLAÇÃO CRÍTICA: ${(playerEcon.inflacao * 100).toFixed(1)}% ao ano — custo de vida dispara, estabilidade política caiu -${inflacaoPenalty}.`
+          });
+        }
+
+        // PIB negativo impõe corte orçamentário emergencial
+        if (playerEcon.pibCrescimento < 0) {
+          const corteFunds = Math.max(5, Math.floor(Math.abs(playerEcon.pibCrescimento) * 200));
+          updatedFactions[prev.playerFaction].resources.funds = Math.max(
+            0,
+            updatedFactions[prev.playerFaction].resources.funds - corteFunds
+          );
+          internalLogs.push({
+            id: `econ_recessao_${nextTurn}`,
+            turn: nextTurn,
+            type: 'ECONOMIA',
+            message: `🔴 RECESSÃO: PIB retraindo ${(Math.abs(playerEcon.pibCrescimento) * 100).toFixed(2)}% — corte emergencial de F$${corteFunds} no orçamento de guerra.`
+          });
+        }
+
+        // PIB forte (>5%) gera bônus de produção
+        if (playerEcon.pibCrescimento > 0.05) {
+          const bonusFunds = Math.floor((playerEcon.pibCrescimento - 0.05) * 300);
+          updatedFactions[prev.playerFaction].resources.funds += bonusFunds;
+          internalLogs.push({
+            id: `econ_crescimento_${nextTurn}`,
+            turn: nextTurn,
+            type: 'ECONOMIA',
+            message: `✅ CRESCIMENTO ACELERADO: PIB a ${(playerEcon.pibCrescimento * 100).toFixed(1)}% — superávit industrial gerou +F$${bonusFunds} extras ao tesouro.`
+          });
+        }
+      }
 
       // 1.5 Processar impactos contínuos da Infraestrutura Estratégica
       const acarayItem = prev.infrastructure.items.find(i => i.id === 'ACARAY');
@@ -1815,6 +1916,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     <GameContext.Provider value={{
       gameState,
       weatherState,
+      economicIndicators,
       startGame,
       resetGame,
       advanceTurn,
