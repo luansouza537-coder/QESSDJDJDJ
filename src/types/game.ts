@@ -40,11 +40,21 @@ export interface Faction {
 
 export type TerrainType = 'Urbano' | 'Floresta' | 'Chaco' | 'Pantanal' | 'Rio/Barragem' | 'Campo Aberto';
 
+export type UnitType = 'INFANTARIA' | 'BLINDADOS' | 'ARTILHARIA' | 'FORCA_ESPECIAL';
+
+export interface UnitComposition {
+  INFANTARIA: number;
+  BLINDADOS: number;
+  ARTILHARIA: number;
+  FORCA_ESPECIAL: number;
+}
+
 export interface Region {
   id: RegionID;
   name: string;
   controller: FactionID;
   troops: number;        // Quantidade de brigadas estrategicamente posicionadas
+  composition: UnitComposition; // Breakdown de tipos de unidade (soma = troops)
   morale: number;        // Moral da população/tropa local (0-100)
   energyProduction: number;   // Energia gerada por turno nesta região
   supplyProduction: number;   // Suprimentos gerados por turno nesta região
@@ -153,6 +163,8 @@ export interface ActiveBattle {
   defenderInitialTroops: number;
   currentAttackerTroops: number;
   currentDefenderTroops: number;
+  attackerComposition: UnitComposition;
+  defenderComposition: UnitComposition;
   terrain: TerrainType;
   rounds: BattleRound[];
   currentRound: number;

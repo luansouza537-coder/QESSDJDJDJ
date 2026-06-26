@@ -23,15 +23,92 @@ import {
   ActiveBattle,
   BattleRound,
   BattleReport,
-  EconomicIndicators
+  EconomicIndicators,
+  UnitType,
+  UnitComposition,
+  TerrainType
 } from '../types/game';
 import { INITIAL_FACTIONS, INITIAL_REGIONS, INITIAL_CHARACTERS, INITIAL_RELATIONS } from '../data/initialData';
 import { INITIAL_INFRASTRUCTURE_STATE } from '../data/infrastructureData';
 import { GEOPOLITICAL_EVENTS } from '../data/events';
 import { PREQUEL_EVENTS, PREQUEL_EVENTS_PARAGUAI, generateProceduralEvent } from '../data/campaignEvents';
 
-// Re-export para compatibilidade com imports existentes
+// Re-exports para compatibilidade com imports existentes
 export type { EconomicIndicators };
+export type { UnitType, UnitComposition };
+
+// Custos de recrutamento por tipo de unidade
+export const UNIT_COSTS: Record<UnitType, { funds: number; supplies: number }> = {
+  INFANTARIA:    { funds: 4,  supplies: 10 },
+  BLINDADOS:     { funds: 10, supplies: 15 },
+  ARTILHARIA:    { funds: 8,  supplies: 12 },
+  FORCA_ESPECIAL:{ funds: 12, supplies: 8  },
+};
+
+// Multiplicador de eficácia de combate por tipo de unidade × terreno
+function calcCompositionMultiplier(
+  composition: UnitComposition,
+  totalTroops: number,
+  terrain: TerrainType
+): number {
+  if (totalTroops <= 0) return 1.0;
+  const mult: Record<UnitType, Record<TerrainType, number>> = {
+    INFANTARIA:     { 'Urbano': 1.00, 'Floresta': 1.00, 'Chaco': 1.00, 'Pantanal': 1.00, 'Rio/Barragem': 1.00, 'Campo Aberto': 1.00 },
+    BLINDADOS:      { 'Campo Aberto': 1.35, 'Chaco': 1.00, 'Pantanal': 0.60, 'Floresta': 0.65, 'Rio/Barragem': 0.75, 'Urbano': 0.80 },
+    ARTILHARIA:     { 'Campo Aberto': 1.30, 'Urbano': 1.25, 'Chaco': 1.10, 'Pantanal': 0.85, 'Floresta': 0.70, 'Rio/Barragem': 0.90 },
+    FORCA_ESPECIAL: { 'Floresta': 1.40, 'Urbano': 1.25, 'Chaco': 1.20, 'Campo Aberto': 1.10, 'Pantanal': 1.15, 'Rio/Barragem': 1.15 },
+  };
+  const unitTypes: UnitType[] = ['INFANTARIA', 'BLINDADOS', 'ARTILHARIA', 'FORCA_ESPECIAL'];
+  let weighted = 0;
+  for (const t of unitTypes) {
+    weighted += composition[t] * (mult[t][terrain] ?? 1.0);
+  }
+  return weighted / totalTroops;
+}
+
+// Transfere `count` tropas proporcionalmente da composição de origem
+function transferComposition(
+  source: UnitComposition,
+  sourceTroops: number,
+  count: number
+): { transferred: UnitComposition; remaining: UnitComposition } {
+  if (sourceTroops <= 0 || count <= 0) {
+    return { transferred: { INFANTARIA: count, BLINDADOS: 0, ARTILHARIA: 0, FORCA_ESPECIAL: 0 }, remaining: { ...source } };
+  }
+  const ratio = count / sourceTroops;
+  const transferred: UnitComposition = { INFANTARIA: 0, BLINDADOS: 0, ARTILHARIA: 0, FORCA_ESPECIAL: 0 };
+  let total = 0;
+  for (const t of ['BLINDADOS', 'ARTILHARIA', 'FORCA_ESPECIAL'] as UnitType[]) {
+    const amt = Math.min(source[t], Math.floor(source[t] * ratio));
+    transferred[t] = amt;
+    total += amt;
+  }
+  transferred.INFANTARIA = Math.max(0, count - total);
+  const remaining: UnitComposition = {
+    INFANTARIA: source.INFANTARIA - transferred.INFANTARIA,
+    BLINDADOS:  source.BLINDADOS  - transferred.BLINDADOS,
+    ARTILHARIA: source.ARTILHARIA - transferred.ARTILHARIA,
+    FORCA_ESPECIAL: source.FORCA_ESPECIAL - transferred.FORCA_ESPECIAL,
+  };
+  return { transferred, remaining };
+}
+
+// Escala composição proporcionalmente a um novo total de tropas
+function scaleComposition(comp: UnitComposition, oldTotal: number, newTotal: number): UnitComposition {
+  if (oldTotal <= 0 || newTotal <= 0) return { INFANTARIA: newTotal, BLINDADOS: 0, ARTILHARIA: 0, FORCA_ESPECIAL: 0 };
+  const ratio = newTotal / oldTotal;
+  const scaled: UnitComposition = {
+    INFANTARIA: 0, BLINDADOS: 0, ARTILHARIA: 0, FORCA_ESPECIAL: 0,
+  };
+  let total = 0;
+  for (const t of ['BLINDADOS', 'ARTILHARIA', 'FORCA_ESPECIAL'] as UnitType[]) {
+    const amt = Math.min(comp[t], Math.round(comp[t] * ratio));
+    scaled[t] = amt;
+    total += amt;
+  }
+  scaled.INFANTARIA = Math.max(0, newTotal - total);
+  return scaled;
+}
 
 interface GameContextProps {
   gameState: GameState;
@@ -41,7 +118,7 @@ interface GameContextProps {
   advanceTurn: () => void;
   resolveActiveEventChoice: (choiceId: string) => void;
   selectRegion: (regionId: RegionID | null) => void;
-  recruitTroops: (regionId: RegionID, count: number) => boolean;
+  recruitTroops: (regionId: RegionID, count: number, unitType?: UnitType) => boolean;
   moveTroops: (fromRegionId: RegionID, toRegionId: RegionID, count: number) => void;
   deployCharacterMission: (
     characterId: string, 
@@ -233,16 +310,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  // Recrutar tropas (Custo: 8 Supplies e 3 Funds por tropa militar)
-  const recruitTroops = (regionId: RegionID, count: number): boolean => {
+  // Recrutar tropas com tipo de unidade específico
+  const recruitTroops = (regionId: RegionID, count: number, unitType: UnitType = 'INFANTARIA'): boolean => {
     if (gameState.currentTurn === 0) return false;
-    
-    const costPerTroopFunds = 4;
-    const costPerTroopSupplies = 10;
+
+    const cost = UNIT_COSTS[unitType];
     const playerFac = gameState.factions[gameState.playerFaction];
-    
-    const totalFundsCost = costPerTroopFunds * count;
-    const totalSuppliesCost = costPerTroopSupplies * count;
+
+    const totalFundsCost = cost.funds * count;
+    const totalSuppliesCost = cost.supplies * count;
 
     if (playerFac.resources.funds < totalFundsCost || playerFac.resources.supplies < totalSuppliesCost) {
       return false;
@@ -251,16 +327,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setGameState(prev => {
       const updatedFactions = { ...prev.factions };
       const updatedRegions = { ...prev.regions };
-      
+
       updatedFactions[prev.playerFaction].resources.funds -= totalFundsCost;
       updatedFactions[prev.playerFaction].resources.supplies -= totalSuppliesCost;
       updatedRegions[regionId].troops += count;
+      updatedRegions[regionId].composition = {
+        ...updatedRegions[regionId].composition,
+        [unitType]: updatedRegions[regionId].composition[unitType] + count,
+      };
+
+      const unitLabels: Record<UnitType, string> = {
+        INFANTARIA: 'brigadas de infantaria',
+        BLINDADOS: 'esquadrões blindados',
+        ARTILHARIA: 'baterias de artilharia',
+        FORCA_ESPECIAL: 'operativos de força especial',
+      };
 
       const newLog: HistoryLog = {
         id: `recruit_${prev.currentTurn}_${Date.now()}`,
         turn: prev.currentTurn,
         type: 'MILITAR',
-        message: `Mobilizadas +${count} brigadas de infantaria em ${updatedRegions[regionId].name} ao custo de F$ ${totalFundsCost} e ${totalSuppliesCost} suprimentos.`
+        message: `Mobilizados +${count} ${unitLabels[unitType]} em ${updatedRegions[regionId].name} ao custo de F$ ${totalFundsCost} e ${totalSuppliesCost} suprimentos.`
       };
 
       return {
@@ -293,9 +380,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       if (!isCombat) {
         // Movimentação amistosa simples de reforço
+        const { transferred, remaining } = transferComposition(
+          updatedRegions[fromRegionId].composition,
+          updatedRegions[fromRegionId].troops,
+          count
+        );
         updatedRegions[fromRegionId].troops -= count;
+        updatedRegions[fromRegionId].composition = remaining;
         updatedRegions[toRegionId].troops += count;
-        
+        updatedRegions[toRegionId].composition = {
+          INFANTARIA: updatedRegions[toRegionId].composition.INFANTARIA + transferred.INFANTARIA,
+          BLINDADOS:  updatedRegions[toRegionId].composition.BLINDADOS  + transferred.BLINDADOS,
+          ARTILHARIA: updatedRegions[toRegionId].composition.ARTILHARIA + transferred.ARTILHARIA,
+          FORCA_ESPECIAL: updatedRegions[toRegionId].composition.FORCA_ESPECIAL + transferred.FORCA_ESPECIAL,
+        };
+
         logs.push({
           id: `move_${currentTurn}_${Date.now()}`,
           turn: currentTurn,
@@ -310,8 +409,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         };
       } else {
         // Iniciar Combate Tático Por Turnos!
-        // Reduzir as tropas que se deslocaram da base de origem
+        const { transferred: atkComp, remaining: fromRemaining } = transferComposition(
+          updatedRegions[fromRegionId].composition,
+          updatedRegions[fromRegionId].troops,
+          count
+        );
         updatedRegions[fromRegionId].troops -= count;
+        updatedRegions[fromRegionId].composition = fromRemaining;
 
         const activeBattle: ActiveBattle = {
           regionId: toRegionId,
@@ -321,6 +425,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           defenderInitialTroops: targetRegion.troops,
           currentAttackerTroops: count,
           currentDefenderTroops: targetRegion.troops,
+          attackerComposition: atkComp,
+          defenderComposition: { ...targetRegion.composition },
           terrain: targetRegion.terrain,
           rounds: [],
           currentRound: 0,
@@ -421,6 +527,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
           break;
       }
 
+      // Aplicar modificadores de composição de unidades × terreno
+      const atkCompMult = calcCompositionMultiplier(battle.attackerComposition, battle.currentAttackerTroops, battle.terrain);
+      const defCompMult = calcCompositionMultiplier(battle.defenderComposition, battle.currentDefenderTroops, battle.terrain);
+      attackerDmg *= atkCompMult;
+      defenderDmg *= defCompMult;
+
       // Aplicar modificadores climáticos (motor real-time)
       const zonaClimatica = regiaoParaZonaClimatica(battle.regionId);
       const clima = engineManager.getSimState()?.climaGlobal[zonaClimatica];
@@ -503,15 +615,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (isAttackerWinner) {
           updatedRegions[battle.regionId].controller = battle.attacker;
           updatedRegions[battle.regionId].troops = nextAtkTroops;
+          updatedRegions[battle.regionId].composition = scaleComposition(battle.attackerComposition, battle.attackerInitialTroops, nextAtkTroops);
           updatedRegions[battle.regionId].morale = Math.max(15, Math.floor(targetRegion.morale - 20));
-          
+
           finalReportLog = `CONQUISTA DO SETOR ${targetRegion.name}! Nossas forças terrestres aniquilaram as defesas do oponente. Terreno: ${battle.terrain}. ${nextAtkTroops} brigadas operam agora para consolidar o perímetro de ocupação. Baixas: Atacante [-${battle.attackerLosses}] | Defensor [-${battle.defenderLosses}].`;
         } else {
-          updatedRegions[battle.regionId].troops = Math.max(1, nextDefTroops);
+          const defSurv = Math.max(1, nextDefTroops);
+          updatedRegions[battle.regionId].troops = defSurv;
+          updatedRegions[battle.regionId].composition = scaleComposition(battle.defenderComposition, battle.defenderInitialTroops, defSurv);
           updatedRegions[battle.regionId].morale = Math.max(25, Math.floor(targetRegion.morale - 10));
 
           if (nextAtkTroops > 0) {
+            const retComp = scaleComposition(battle.attackerComposition, battle.attackerInitialTroops, nextAtkTroops);
             updatedRegions[battle.fromRegionId].troops += nextAtkTroops;
+            updatedRegions[battle.fromRegionId].composition = {
+              INFANTARIA: updatedRegions[battle.fromRegionId].composition.INFANTARIA + retComp.INFANTARIA,
+              BLINDADOS:  updatedRegions[battle.fromRegionId].composition.BLINDADOS  + retComp.BLINDADOS,
+              ARTILHARIA: updatedRegions[battle.fromRegionId].composition.ARTILHARIA + retComp.ARTILHARIA,
+              FORCA_ESPECIAL: updatedRegions[battle.fromRegionId].composition.FORCA_ESPECIAL + retComp.FORCA_ESPECIAL,
+            };
             finalReportLog = `RECUO DEFENSIVO EM ${targetRegion.name}. A ofensiva tática falhou contra as linhas fortificadas oponentes. ${nextAtkTroops} fuzileiros retrocederam em segurança para ${updatedRegions[battle.fromRegionId].name}. Baixas: Atacante [-${battle.attackerLosses}] | Defensor [-${battle.defenderLosses}].`;
           } else {
             finalReportLog = `ANIQUILAÇÃO TOTAL DAS FORÇAS DE ASSALTO na ofensiva em ${targetRegion.name}. Nossas brigadas caíram integralmente no combate. Baixas: Atacante [-${battle.attackerLosses}] | Defensor [-${battle.defenderLosses}].`;
@@ -639,6 +761,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
             break;
         }
 
+        // Aplicar modificadores de composição de unidades × terreno
+        attackerDmg *= calcCompositionMultiplier(battle.attackerComposition, battle.currentAttackerTroops, battle.terrain);
+        defenderDmg *= calcCompositionMultiplier(battle.defenderComposition, battle.currentDefenderTroops, battle.terrain);
+
         let atkLosses = Math.min(battle.currentAttackerTroops, Math.max(1, Math.floor(defenderDmg)));
         let defLosses = Math.min(battle.currentDefenderTroops, Math.max(1, Math.floor(attackerDmg)));
 
@@ -697,14 +823,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (isAttackerWinner) {
             updatedRegions[battle.regionId].controller = battle.attacker;
             updatedRegions[battle.regionId].troops = nextAtkTroops;
+            updatedRegions[battle.regionId].composition = scaleComposition(battle.attackerComposition, battle.attackerInitialTroops, nextAtkTroops);
             updatedRegions[battle.regionId].morale = Math.max(15, Math.floor(targetRegion.morale - 20));
             finalReportLog = `CONQUISTA DO SETOR ${targetRegion.name}! Nossas forças terrestres aniquilaram as defesas do oponente. Terreno: ${battle.terrain}. ${nextAtkTroops} brigadas operam agora para consolidar o perímetro de ocupação. Baixas: Atacante [-${battle.attackerLosses}] | Defensor [-${battle.defenderLosses}].`;
           } else {
-            updatedRegions[battle.regionId].troops = Math.max(1, nextDefTroops);
+            const defSurv = Math.max(1, nextDefTroops);
+            updatedRegions[battle.regionId].troops = defSurv;
+            updatedRegions[battle.regionId].composition = scaleComposition(battle.defenderComposition, battle.defenderInitialTroops, defSurv);
             updatedRegions[battle.regionId].morale = Math.max(25, Math.floor(targetRegion.morale - 10));
 
             if (nextAtkTroops > 0) {
+              const retComp = scaleComposition(battle.attackerComposition, battle.attackerInitialTroops, nextAtkTroops);
               updatedRegions[battle.fromRegionId].troops += nextAtkTroops;
+              updatedRegions[battle.fromRegionId].composition = {
+                INFANTARIA: updatedRegions[battle.fromRegionId].composition.INFANTARIA + retComp.INFANTARIA,
+                BLINDADOS:  updatedRegions[battle.fromRegionId].composition.BLINDADOS  + retComp.BLINDADOS,
+                ARTILHARIA: updatedRegions[battle.fromRegionId].composition.ARTILHARIA + retComp.ARTILHARIA,
+                FORCA_ESPECIAL: updatedRegions[battle.fromRegionId].composition.FORCA_ESPECIAL + retComp.FORCA_ESPECIAL,
+              };
               finalReportLog = `RECUO DEFENSIVO EM ${targetRegion.name}. A ofensiva tática falhou contra as linhas fortificadas oponentes. ${nextAtkTroops} fuzileiros retrocederam em segurança para ${updatedRegions[battle.fromRegionId].name}. Baixas: Atacante [-${battle.attackerLosses}] | Defensor [-${battle.defenderLosses}].`;
             } else {
               finalReportLog = `ANIQUILAÇÃO TOTAL DAS FORÇAS DE ASSALTO na ofensiva em ${targetRegion.name}. Nossas brigadas caíram integralmente no combate. Baixas: Atacante [-${battle.attackerLosses}] | Defensor [-${battle.defenderLosses}].`;
@@ -773,7 +909,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const survivingTroops = battle.currentAttackerTroops;
 
       if (survivingTroops > 0) {
+        const retComp = scaleComposition(battle.attackerComposition, battle.attackerInitialTroops, survivingTroops);
         updatedRegions[battle.fromRegionId].troops += survivingTroops;
+        updatedRegions[battle.fromRegionId].composition = {
+          INFANTARIA: updatedRegions[battle.fromRegionId].composition.INFANTARIA + retComp.INFANTARIA,
+          BLINDADOS:  updatedRegions[battle.fromRegionId].composition.BLINDADOS  + retComp.BLINDADOS,
+          ARTILHARIA: updatedRegions[battle.fromRegionId].composition.ARTILHARIA + retComp.ARTILHARIA,
+          FORCA_ESPECIAL: updatedRegions[battle.fromRegionId].composition.FORCA_ESPECIAL + retComp.FORCA_ESPECIAL,
+        };
       }
 
       battle.finished = true;

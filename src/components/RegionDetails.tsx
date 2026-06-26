@@ -4,21 +4,32 @@
  */
 
 import React, { useState } from 'react';
-import { useGame, REGION_ADJACENCY } from '../context/GameContext';
-import { RegionID } from '../types/game';
-import { 
-  Shield, 
-  Zap, 
-  Package, 
-  Coins, 
-  Users, 
-  Compass, 
-  AlertTriangle, 
-  ArrowRight, 
+import { useGame, REGION_ADJACENCY, UNIT_COSTS } from '../context/GameContext';
+import { RegionID, UnitType } from '../types/game';
+import {
+  Shield,
+  Zap,
+  Package,
+  Coins,
+  Users,
+  Compass,
+  AlertTriangle,
+  ArrowRight,
   Award,
   Lock,
-  Target
+  Target,
+  Crosshair,
+  Flame,
+  Swords,
+  Star
 } from 'lucide-react';
+
+const UNIT_INFO: Record<UnitType, { label: string; shortLabel: string; color: string; bgColor: string; icon: React.ReactNode; terrainNote: string }> = {
+  INFANTARIA:     { label: 'Infantaria',      shortLabel: 'INF', color: 'text-slate-300',  bgColor: 'bg-slate-600',  icon: <Users className="w-3.5 h-3.5" />,    terrainNote: 'Versátil em todos os terrenos' },
+  BLINDADOS:      { label: 'Blindados',       shortLabel: 'BLD', color: 'text-amber-400',  bgColor: 'bg-amber-600',  icon: <Crosshair className="w-3.5 h-3.5" />, terrainNote: '+35% Campo Aberto | -40% Pantanal' },
+  ARTILHARIA:     { label: 'Artilharia',      shortLabel: 'ART', color: 'text-red-400',    bgColor: 'bg-red-700',    icon: <Flame className="w-3.5 h-3.5" />,     terrainNote: '+30% Campo Aberto | +25% Urbano' },
+  FORCA_ESPECIAL: { label: 'Força Especial',  shortLabel: 'FSP', color: 'text-teal-400',   bgColor: 'bg-teal-700',   icon: <Star className="w-3.5 h-3.5" />,      terrainNote: '+40% Floresta | +25% Urbano' },
+};
 
 export default function RegionDetails() {
   const { 
@@ -33,6 +44,7 @@ export default function RegionDetails() {
 
   // Estado para quantidade de recrutas e transporte
   const [recruitCount, setRecruitCount] = useState<number>(5);
+  const [selectedUnitType, setSelectedUnitType] = useState<UnitType>('INFANTARIA');
   const [moveCount, setMoveCount] = useState<number>(5);
   const [targetRegionId, setTargetRegionId] = useState<RegionID | ''>('');
   const [selectedCharId, setSelectedCharId] = useState<string>('');
@@ -69,7 +81,7 @@ export default function RegionDetails() {
     e.preventDefault();
     if (recruitCount <= 0) return;
     setRecruitError(null);
-    const success = recruitTroops(currentRegion.id, recruitCount);
+    const success = recruitTroops(currentRegion.id, recruitCount, selectedUnitType);
     if (!success) {
       setRecruitError('Fundos ou Suprimentos insuficientes para recrutar esse contingente.');
     }
@@ -96,9 +108,10 @@ export default function RegionDetails() {
     setSelectedCharId('');
   };
 
-  // Custos calculados
-  const costFunds = recruitCount * 4;
-  const costSupplies = recruitCount * 10;
+  // Custos calculados baseados no tipo de unidade selecionado
+  const unitCost = UNIT_COSTS[selectedUnitType];
+  const costFunds = recruitCount * unitCost.funds;
+  const costSupplies = recruitCount * unitCost.supplies;
   const canAffordRecruits = playerResources.funds >= costFunds && playerResources.supplies >= costSupplies;
 
   return (
@@ -121,6 +134,41 @@ export default function RegionDetails() {
           </div>
         </div>
       </div>
+
+      {/* Barra de composição de unidades */}
+      {currentRegion.troops > 0 && (
+        <div className="mb-4">
+          <div className="text-[9px] font-mono text-slate-500 uppercase mb-1.5 tracking-widest">Composição do Contingente</div>
+          <div className="flex h-2.5 rounded-full overflow-hidden w-full bg-slate-800">
+            {(['INFANTARIA', 'BLINDADOS', 'ARTILHARIA', 'FORCA_ESPECIAL'] as UnitType[]).map(type => {
+              const count = currentRegion.composition?.[type] ?? 0;
+              const pct = currentRegion.troops > 0 ? (count / currentRegion.troops) * 100 : 0;
+              if (pct < 0.5) return null;
+              return (
+                <div
+                  key={type}
+                  className={`${UNIT_INFO[type].bgColor} transition-all duration-500`}
+                  style={{ width: `${pct}%` }}
+                  title={`${UNIT_INFO[type].label}: ${count}`}
+                />
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5">
+            {(['INFANTARIA', 'BLINDADOS', 'ARTILHARIA', 'FORCA_ESPECIAL'] as UnitType[]).map(type => {
+              const count = currentRegion.composition?.[type] ?? 0;
+              if (count === 0) return null;
+              const info = UNIT_INFO[type];
+              return (
+                <span key={type} className={`text-[9px] font-mono ${info.color} flex items-center gap-0.5`}>
+                  <span className={`w-1.5 h-1.5 rounded-full inline-block ${info.bgColor}`} />
+                  {info.shortLabel} {count}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <p className="text-xs text-slate-350 leading-relaxed mb-4 leading-relaxed font-sans border-l-2 border-slate-700 pl-3">
         {currentRegion.description}
@@ -167,10 +215,38 @@ export default function RegionDetails() {
               <Users className="w-3.5 h-3.5" />
               <span>Contingenciamento e Treinamento</span>
             </h4>
+            {/* Seletor de tipo de unidade */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-3">
+              {(['INFANTARIA', 'BLINDADOS', 'ARTILHARIA', 'FORCA_ESPECIAL'] as UnitType[]).map(type => {
+                const info = UNIT_INFO[type];
+                const cost = UNIT_COSTS[type];
+                const isSelected = selectedUnitType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSelectedUnitType(type)}
+                    className={`flex flex-col items-center p-2 rounded-lg border text-center transition ${
+                      isSelected
+                        ? 'bg-slate-800/60 border-teal-500/70 shadow-md'
+                        : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className={`${info.color} mb-0.5`}>{info.icon}</span>
+                    <span className={`text-[9px] font-bold font-mono ${isSelected ? 'text-slate-100' : 'text-slate-400'}`}>{info.label}</span>
+                    <span className="text-[8px] font-mono text-slate-500 mt-0.5">F${cost.funds} | 📦{cost.supplies}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[9px] font-mono text-slate-500 mb-2 bg-slate-900/60 px-2 py-1 rounded border border-slate-800/60">
+              ⚔️ {UNIT_INFO[selectedUnitType].terrainNote}
+            </div>
+
             <form onSubmit={handleRecruit} className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center justify-between">
               <div className="flex items-center space-x-2 w-full sm:w-auto">
-                <label className="text-xs font-mono text-slate-400">Soldados:</label>
-                <input 
+                <label className="text-xs font-mono text-slate-400">Qtd.:</label>
+                <input
                   type="number"
                   min="1"
                   max="30"
@@ -182,7 +258,7 @@ export default function RegionDetails() {
 
               {/* Custos dinâmicos */}
               <div className="flex space-x-3 text-[10px] font-mono bg-slate-950 px-3 py-1.5 rounded border border-slate-850">
-                <span className="text-slate-500">Custos:</span>
+                <span className="text-slate-500">Custo:</span>
                 <span className={playerResources.funds >= costFunds ? "text-yellow-405 font-medium" : "text-red-400 font-bold"}>
                   F$ {costFunds}
                 </span>
@@ -196,8 +272,8 @@ export default function RegionDetails() {
                 type="submit"
                 disabled={!canAffordRecruits}
                 className={`w-full sm:w-auto text-xs font-bold px-4 py-1.5 rounded transition ${
-                  canAffordRecruits 
-                    ? 'bg-emerald-700 hover:bg-emerald-600 text-slate-100 cursor-pointer shadow-lg shadow-emerald-950/40' 
+                  canAffordRecruits
+                    ? 'bg-emerald-700 hover:bg-emerald-600 text-slate-100 cursor-pointer shadow-lg shadow-emerald-950/40'
                     : 'bg-slate-850 text-slate-500 cursor-not-allowed border border-slate-800'
                 }`}
               >
