@@ -10,6 +10,7 @@ import { EconomySystem } from '../engine/EconomySystem';
 import { criarEstadoSimulacao, regiaoParaZonaClimatica } from '../engine/SimulationBridge';
 import { processarLogisticaRegional } from '../engine/RegionalLogistics';
 import { executarTurnoIA } from '../engine/AISystem';
+import { avaliarCondicoes, gerarEventoGemini, CondicaoJogo } from '../engine/EventSystem';
 import { EstadoJogoSimulacao, ClimaRegional } from '../types/simulation';
 import { 
   GameState, 
@@ -44,6 +45,7 @@ interface GameContextProps {
   gameState: GameState;
   weatherState: Record<string, ClimaRegional>;
   economicIndicators: EconomicIndicators | null;
+  pendingEventGeneration: boolean;
   startGame: (factionId: FactionID, difficulty: 'FACIL' | 'NORMAL' | 'DIFICIL', advisor: string) => void;
   resetGame: () => void;
   advanceTurn: () => void;
@@ -89,6 +91,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const simStateRef = useRef<EstadoJogoSimulacao | null>(null);
   const [weatherState, setWeatherState] = useState<Record<string, ClimaRegional>>({});
   const [economicIndicators, setEconomicIndicators] = useState<EconomicIndicators | null>(null);
+  const [pendingEventGeneration, setPendingEventGeneration] = useState(false);
+  const pendingEventContextRef = useRef<{ conditionType: CondicaoJogo; gameStateCopy: GameState } | null>(null);
 
   const [gameState, setGameState] = useState<GameState>(() => {
     // Estado inicial fictício até o jogo começar pelo Menu Principal
@@ -243,6 +247,42 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
     };
   }, []);
+
+  // Geração assíncrona de eventos pelo Gemini — dispara quando advanceTurn sinaliza
+  useEffect(() => {
+    if (!pendingEventGeneration || !pendingEventContextRef.current) return;
+
+    const ctx = pendingEventContextRef.current;
+    pendingEventContextRef.current = null;
+
+    gerarEventoGemini(ctx.gameStateCopy, ctx.conditionType)
+      .then(geminiEvent => {
+        setGameState(prev => {
+          // Não sobrescreve se um evento fixo de enredo já foi definido
+          if (prev.activeEvent !== null) return prev;
+
+          const finalEvent = geminiEvent ?? generateProceduralEvent(prev.currentTurn, prev);
+          const source = geminiEvent ? 'Análise de inteligência ativa' : 'Relatório operacional automático';
+
+          return {
+            ...prev,
+            activeEvent: finalEvent,
+            historyLogs: [
+              {
+                id: `event_ai_${prev.currentTurn}_${Date.now()}`,
+                turn: prev.currentTurn,
+                type: 'EVENTO' as const,
+                message: `🚨 COMUNICAÇÃO OPERACIONAL: ${finalEvent.title}. ${source}.`,
+              },
+              ...prev.historyLogs,
+            ],
+          };
+        });
+      })
+      .finally(() => {
+        setPendingEventGeneration(false);
+      });
+  }, [pendingEventGeneration]);
 
   const selectRegion = (regionId: RegionID | null) => {
     setGameState(prev => ({
@@ -1054,6 +1094,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const advanceTurn = () => {
     if (gameState.currentTurn === 0 || gameState.activeEvent !== null) return;
 
+    // Avalia condições ANTES do setGameState para capturar o estado atual
+    const condicaoAtual = avaliarCondicoes(gameState);
+    const apiKeyDisponivel = !!(import.meta.env as Record<string, string | undefined>)['VITE_GEMINI_API_KEY'];
+    const nextTurnNum = gameState.currentTurn + 1;
+
+    // Determina antecipadamente se este turno vai gerar evento pelo Gemini.
+    // Turnos fixos (2, 5, 10) e estados de fim de jogo usam eventos pré-definidos.
+    const isFixedTurn = nextTurnNum === 2 || nextTurnNum === 5 || nextTurnNum === 10;
+    const playerControlsItaipu  = gameState.regions['ITAIPU']?.controller  === gameState.playerFaction;
+    const playerControlsAssuncao = gameState.regions['ASSUNCAO']?.controller === gameState.playerFaction;
+    const playerControlsCde      = gameState.regions['CIUDAD_DEL_ESTE']?.controller === gameState.playerFaction;
+    const playerControlsBrasilia = gameState.regions['BRASILIA']?.controller === gameState.playerFaction;
+    const isVictoryOrDefeat =
+      (playerControlsItaipu && playerControlsAssuncao && playerControlsCde) ||
+      !playerControlsBrasilia || !playerControlsItaipu;
+    const isEndGameTurn = nextTurnNum >= 15 || isVictoryOrDefeat;
+    const useGeminiForEvent = apiKeyDisponivel && !isFixedTurn && !isEndGameTurn;
+
+    if (useGeminiForEvent) {
+      pendingEventContextRef.current = {
+        conditionType: condicaoAtual,
+        gameStateCopy: { ...gameState, historyLogs: gameState.historyLogs.slice(0, 10) },
+      };
+    }
+
     setGameState(prev => {
       const nextTurn = prev.currentTurn + 1;
       const updatedFactions = JSON.parse(JSON.stringify(prev.factions)) as Record<FactionID, Faction>;
@@ -1397,19 +1462,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
           }, ...prev.historyLogs]
         };
       } else {
-        // Caso médio: Sorteamos um evento procedimental temático (War Prep, CIA Ops, Chinese, Propaganda...)
-        const uncompletedEvents = GEOPOLITICAL_EVENTS.filter(
-          evt => !prev.historyLogs.some(l => l.message.includes(evt.title))
-        );
-
-        if (uncompletedEvents.length > 0 && Math.random() < 0.40) {
-          triggeredEvent = uncompletedEvents[Math.floor(Math.random() * uncompletedEvents.length)];
+        if (useGeminiForEvent) {
+          // Gemini gera evento contextual assincronamente — activeEvent ficará null
+          // até que o useEffect conclua e chame setGameState com o evento gerado
+          logMsg = '';
         } else {
-          // Gerador procedimental contínuo de 100+ eventos!
-          triggeredEvent = generateProceduralEvent(nextTurn, prev);
-        }
+          // Fallback: evento procedimental temático quando Gemini não está disponível
+          const uncompletedEvents = GEOPOLITICAL_EVENTS.filter(
+            evt => !prev.historyLogs.some(l => l.message.includes(evt.title))
+          );
 
-        logMsg = `🚨 COMUNICAÇÃO OPERACIONAL: ${triggeredEvent.title}. Ganhos de inteligência aplicados.`;
+          if (uncompletedEvents.length > 0 && Math.random() < 0.40) {
+            triggeredEvent = uncompletedEvents[Math.floor(Math.random() * uncompletedEvents.length)];
+          } else {
+            triggeredEvent = generateProceduralEvent(nextTurn, prev);
+          }
+
+          logMsg = `🚨 COMUNICAÇÃO OPERACIONAL: ${triggeredEvent.title}. Ganhos de inteligência aplicados.`;
+        }
       }
 
       if (triggeredEvent) {
@@ -1434,6 +1504,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         historyLogs: [...internalLogs, ...prev.historyLogs]
       };
     });
+
+    // Dispara geração assíncrona se o Gemini for responsável pelo evento deste turno
+    if (useGeminiForEvent) {
+      setPendingEventGeneration(true);
+    }
   };
 
   // Resolver escolha do evento estocando consequências táticas no estado global
@@ -1872,6 +1947,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       gameState,
       weatherState,
       economicIndicators,
+      pendingEventGeneration,
       startGame,
       resetGame,
       advanceTurn,

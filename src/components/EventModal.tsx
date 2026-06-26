@@ -20,11 +20,30 @@ import {
 } from 'lucide-react';
 
 export default function EventModal() {
-  const { gameState, resolveActiveEventChoice } = useGame();
+  const { gameState, resolveActiveEventChoice, pendingEventGeneration } = useGame();
   const { activeEvent, playerFaction, factions } = gameState;
 
   // Guarda qual escolha está atualmente selecionada no modal
   const [selectedChoiceId, setSelectedChoiceId] = useState<string>('');
+
+  // Exibe spinner enquanto o Gemini gera o evento contextual
+  if (!activeEvent && pendingEventGeneration) {
+    return (
+      <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl px-10 py-8 flex flex-col items-center gap-4 shadow-2xl">
+          <div className="w-8 h-8 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
+          <div className="text-center">
+            <p className="text-slate-200 font-bold font-sans text-sm tracking-tight mb-1">
+              Processando Inteligência Operacional
+            </p>
+            <p className="text-slate-500 font-mono text-[10px] uppercase tracking-widest">
+              Análise de situação em andamento...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!activeEvent) return null;
 
