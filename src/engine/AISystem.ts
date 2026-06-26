@@ -105,7 +105,11 @@ function resolverCombateIA(
   } else {
     // Defensor sustenta a posição
     alvo.troops = Math.max(1, defTroops);
-    regions[atacanteRegiao].troops += Math.max(0, atkTroops);
+    const retorno = Math.max(0, atkTroops);
+    regions[atacanteRegiao].troops += retorno;
+    if (regions[atacanteRegiao].composition) {
+      regions[atacanteRegiao].composition.INFANTARIA += retorno;
+    }
 
     logs.unshift({
       id: `ai_repelled_${alvoRegiao}_${currentTurn}_${Date.now()}`,
@@ -203,6 +207,8 @@ export function executarTurnoIA(
           if (mover > 0) {
             origem.troops -= mover;
             destino.troops += mover;
+            if (origem.composition) origem.composition.INFANTARIA = Math.max(0, origem.composition.INFANTARIA - mover);
+            if (destino.composition) destino.composition.INFANTARIA += mover;
           }
         }
       }
@@ -264,8 +270,14 @@ export function executarTurnoIA(
       candidatos.sort((a, b) => b.score - a.score);
       const melhor = candidatos[0];
 
-      // Retira tropas da origem antes do combate
+      // Retira tropas da origem antes do combate (IA só usa infantaria)
       regions[melhor.origem].troops -= melhor.tropas;
+      if (regions[melhor.origem].composition) {
+        regions[melhor.origem].composition.INFANTARIA = Math.max(
+          0,
+          regions[melhor.origem].composition.INFANTARIA - melhor.tropas
+        );
+      }
 
       resolverCombateIA(
         melhor.origem,
@@ -304,6 +316,8 @@ export function executarTurnoIA(
             if (reforco > 0) {
               doador.troops -= reforco;
               ameacada.troops += reforco;
+              if (doador.composition) doador.composition.INFANTARIA = Math.max(0, doador.composition.INFANTARIA - reforco);
+              if (ameacada.composition) ameacada.composition.INFANTARIA += reforco;
             }
           }
         }
