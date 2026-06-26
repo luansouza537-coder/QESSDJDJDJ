@@ -8,6 +8,7 @@ import { GameLoop } from '../engine/GameLoop';
 import { WeatherSystem } from '../engine/WeatherSystem';
 import { EconomySystem } from '../engine/EconomySystem';
 import { criarEstadoSimulacao, regiaoParaZonaClimatica } from '../engine/SimulationBridge';
+import { processarLogisticaRegional } from '../engine/RegionalLogistics';
 import { EstadoJogoSimulacao, ClimaRegional } from '../types/simulation';
 import { 
   GameState, 
@@ -1211,6 +1212,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
           });
         }
       }
+
+      // 1.2 Logística Regional — consumo de suprimentos por manutenção e penalidade de isolamento
+      processarLogisticaRegional(
+        updatedRegions,
+        updatedFactions,
+        REGION_ADJACENCY,
+        nextTurn,
+        internalLogs
+      );
 
       // 1.5 Processar impactos contínuos da Infraestrutura Estratégica
       const acarayItem = prev.infrastructure.items.find(i => i.id === 'ACARAY');
