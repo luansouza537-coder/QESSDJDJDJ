@@ -9,6 +9,7 @@ import { WeatherSystem } from '../engine/WeatherSystem';
 import { EconomySystem } from '../engine/EconomySystem';
 import { criarEstadoSimulacao, regiaoParaZonaClimatica } from '../engine/SimulationBridge';
 import { processarLogisticaRegional } from '../engine/RegionalLogistics';
+import { executarTurnoIA } from '../engine/AISystem';
 import { EstadoJogoSimulacao, ClimaRegional } from '../types/simulation';
 import { 
   GameState, 
@@ -993,70 +994,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // Turno da Facção Oponente / Simulação de Comportamento de IA
-  const simulateAIOpponents = (
-    regions: Record<RegionID, Region>, 
-    factions: Record<FactionID, Faction>,
-    logs: HistoryLog[]
-  ) => {
-    // 1. Paraguai tenta reconquistar Ciudad de Este se tiver tropas em Assunção e CDE estiver desprotegida
-    const paraguayAssuncao = regions['ASSUNCAO'];
-    const cde = regions['CIUDAD_DEL_ESTE'];
-
-    if (factions['PARAGUAI'].resources.supplies > 30) {
-      // Recrutar tropas em Assunção
-      paraguayAssuncao.troops += 3;
-      factions['PARAGUAI'].resources.supplies -= 20;
-    }
-
-    if (cde.controller === 'BRASIL' && paraguayAssuncao.troops > 15) {
-      // Paraguai tenta uma contra-ofensiva em Ciudad del Este!
-      const attackTroops = 10;
-      paraguayAssuncao.troops -= attackTroops;
-
-      const defForce = cde.troops + cde.defenseRating + Math.floor(Math.random() * 4);
-      const attForce = attackTroops + Math.floor(Math.random() * 6);
-
-      const attackerLosses = Math.min(attackTroops, Math.max(1, Math.floor(defForce / 2)));
-      const defenderLosses = Math.min(cde.troops, Math.max(1, Math.floor(attForce / 2)));
-
-      const remAtt = attackTroops - attackerLosses;
-      const remDef = cde.troops - defenderLosses;
-
-      if (remAtt > remDef) {
-        cde.controller = 'PARAGUAI';
-        cde.troops = remAtt;
-        cde.morale = Math.max(20, cde.morale - 10);
-        logs.unshift({
-          id: `ai_battle_${Date.now()}`,
-          turn: gameState.currentTurn,
-          type: 'MILITAR',
-          message: `🚨 CONTRA-ATAQUE! A infantaria paraguaia de Assunção surpreendeu nossas defesas e retomou ${cde.name}. Baixas Brasileiras: [-${defenderLosses}].`
-        });
-      } else {
-        cde.troops = Math.max(1, remDef);
-        paraguayAssuncao.troops += remAtt;
-        logs.unshift({
-          id: `ai_battle_fail_${Date.now()}`,
-          turn: gameState.currentTurn,
-          type: 'MILITAR',
-          message: `🛡️ DEFESA SUSTENTADA! Nossa guarnição em ${cde.name} rechaçou uma investida de blindados do Paraguai. Baixas combatidas: [-${defenderLosses}].`
-        });
-      }
-    }
-
-    // 2. Coalizão do Chaco estoca suprimentos e reforça o deserto
-    if (regions['CHACO'].troops < 15 && factions['COALIZAO_CHACO'].resources.funds > 15) {
-      regions['CHACO'].troops += 4;
-      factions['COALIZAO_CHACO'].resources.funds -= 15;
-      logs.unshift({
-        id: `ai_chaco_${Date.now()}`,
-        turn: gameState.currentTurn,
-        type: 'LOGISTIC',
-        message: `ℹ️ REPORT: A Coalizão do Chaco fortificou seus poços de gás no deserto do Chaco com brigadas estepárias adicionais.`
-      } as any);
-    }
-  };
 
   // Resolver Missões Ativas de Personagens
   const resolveCharacterMissions = (
@@ -1283,8 +1220,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
         message: `=== INÍCIO DO TURNO ${nextTurn} (SEMANA DA CAMPANHA) === Recursos de exploração territorial tributados e estocados com sucesso.`
       });
 
-      // 2. Simular ações táticas de IA oponente
-      simulateAIOpponents(updatedRegions, updatedFactions, internalLogs);
+      // 2. Simular ações táticas de todas as facções de IA
+      executarTurnoIA(
+        updatedRegions,
+        updatedFactions,
+        REGION_ADJACENCY,
+        prev.difficulty,
+        prev.playerFaction,
+        nextTurn,
+        internalLogs
+      );
 
       // 3. Processar missões de personagens brasileiros e oponentes
       const updatedCharacters = resolveCharacterMissions(prev.characters, updatedRegions, updatedFactions, internalLogs);
