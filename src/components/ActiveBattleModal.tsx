@@ -5,6 +5,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import { useWeatherState } from '../hooks/useEngineState';
 import { regiaoParaZonaClimatica } from '../engine/SimulationBridge';
 import { motion } from 'motion/react';
 import {
@@ -27,12 +28,12 @@ import {
 export default function ActiveBattleModal() {
   const {
     gameState,
-    weatherState,
     executeBattleRound,
     retreatBattle,
     autoResolveBattle,
     closeBattleReport
   } = useGame();
+  const weatherState = useWeatherState();
 
   const { activeBattle, factions, regions, characters } = gameState;
   const logEndRef = useRef<HTMLDivElement>(null);

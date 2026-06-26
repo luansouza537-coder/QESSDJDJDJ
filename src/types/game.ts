@@ -125,6 +125,15 @@ export interface HistoryLog {
   message: string;
 }
 
+export interface EconomicIndicators {
+  pib: number;
+  pibCrescimento: number;
+  inflacao: number;
+  desemprego: number;
+  dividaPublica: number;
+  reservasInternacionais: number;
+}
+
 export interface BattleRound {
   round: number;
   attackerRoll: number;

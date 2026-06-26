@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import { useEconomicIndicators } from '../hooks/useEngineState';
 import Map from '../components/Map';
 import RegionDetails from '../components/RegionDetails';
 import DiplomacyPanel from '../components/DiplomacyPanel';
@@ -37,7 +38,7 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { gameState, advanceTurn, economicIndicators } = useGame();
+  const { gameState, advanceTurn } = useGame();
   const {
     currentTurn,
     factions,
@@ -46,6 +47,7 @@ export default function Dashboard() {
     timelineProgress,
     prequelYear
   } = gameState;
+  const economicIndicators = useEconomicIndicators(playerFaction);
 
   // Estado para aba ativa da dashboard
   // Abas normais da guerra: "MAPA", "DIPLOMACIA", "PERSONAGENS", "RELATORIOS"

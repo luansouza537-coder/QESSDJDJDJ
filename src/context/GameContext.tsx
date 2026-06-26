@@ -4,47 +4,37 @@
  */
 
 import React, { createContext, useContext, useState, useRef, ReactNode, useEffect } from 'react';
-import { GameLoop } from '../engine/GameLoop';
-import { WeatherSystem } from '../engine/WeatherSystem';
-import { EconomySystem } from '../engine/EconomySystem';
-import { criarEstadoSimulacao, regiaoParaZonaClimatica } from '../engine/SimulationBridge';
+import { engineManager } from '../engine/EngineManager';
+import { regiaoParaZonaClimatica } from '../engine/SimulationBridge';
 import { processarLogisticaRegional } from '../engine/RegionalLogistics';
 import { executarTurnoIA } from '../engine/AISystem';
 import { avaliarCondicoes, gerarEventoGemini, CondicaoJogo } from '../engine/EventSystem';
-import { EstadoJogoSimulacao, ClimaRegional } from '../types/simulation';
-import { 
-  GameState, 
-  FactionID, 
-  RegionID, 
-  GameEvent, 
-  EventChoice, 
-  HistoryLog, 
-  Character, 
-  Region, 
+import {
+  GameState,
+  FactionID,
+  RegionID,
+  GameEvent,
+  EventChoice,
+  HistoryLog,
+  Character,
+  Region,
   Faction,
   DiplomaticRelation,
   ActiveBattle,
   BattleRound,
-  BattleReport
+  BattleReport,
+  EconomicIndicators
 } from '../types/game';
 import { INITIAL_FACTIONS, INITIAL_REGIONS, INITIAL_CHARACTERS, INITIAL_RELATIONS } from '../data/initialData';
 import { INITIAL_INFRASTRUCTURE_STATE } from '../data/infrastructureData';
 import { GEOPOLITICAL_EVENTS } from '../data/events';
 import { PREQUEL_EVENTS, PREQUEL_EVENTS_PARAGUAI, generateProceduralEvent } from '../data/campaignEvents';
 
-export interface EconomicIndicators {
-  pib: number;
-  pibCrescimento: number;
-  inflacao: number;
-  desemprego: number;
-  dividaPublica: number;
-  reservasInternacionais: number;
-}
+// Re-export para compatibilidade com imports existentes
+export type { EconomicIndicators };
 
 interface GameContextProps {
   gameState: GameState;
-  weatherState: Record<string, ClimaRegional>;
-  economicIndicators: EconomicIndicators | null;
   pendingEventGeneration: boolean;
   startGame: (factionId: FactionID, difficulty: 'FACIL' | 'NORMAL' | 'DIFICIL', advisor: string) => void;
   resetGame: () => void;
@@ -87,10 +77,6 @@ export const REGION_ADJACENCY: Record<RegionID, RegionID[]> = {
 };
 
 export function GameProvider({ children }: { children: ReactNode }) {
-  const gameLoopRef = useRef<GameLoop | null>(null);
-  const simStateRef = useRef<EstadoJogoSimulacao | null>(null);
-  const [weatherState, setWeatherState] = useState<Record<string, ClimaRegional>>({});
-  const [economicIndicators, setEconomicIndicators] = useState<EconomicIndicators | null>(null);
   const [pendingEventGeneration, setPendingEventGeneration] = useState(false);
   const pendingEventContextRef = useRef<{ conditionType: CondicaoJogo; gameStateCopy: GameState } | null>(null);
 
@@ -180,11 +166,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
 
   const resetGame = () => {
-    if (gameLoopRef.current) {
-      gameLoopRef.current.pausar();
-      gameLoopRef.current = null;
-      simStateRef.current = null;
-    }
+    engineManager.stop();
     setGameState(prev => ({
       ...prev,
       currentTurn: 0,
@@ -194,58 +176,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  // Inicia o motor real-time quando a fase de guerra começa; para quando sai da guerra
+  // Delega ciclo de vida do motor real-time ao EngineManager (singleton fora do React)
   useEffect(() => {
-    if (gameState.timelineProgress === 'GUERRA' && !gameLoopRef.current) {
-      const simState = criarEstadoSimulacao(gameState);
-      simStateRef.current = simState;
-
-      const loop = new GameLoop(simState);
-      loop.registrarSubsistema(new WeatherSystem());
-      loop.registrarSubsistema(new EconomySystem());
-
-      // Throttle: sincroniza clima e economia com o React a cada 500ms para evitar re-renders excessivos
-      let ultimaSincronizacao = 0;
-      loop.assinarAtualizacao((estado) => {
-        const agora = performance.now();
-        if (agora - ultimaSincronizacao >= 500) {
-          ultimaSincronizacao = agora;
-          setWeatherState({ ...estado.climaGlobal });
-
-          // Expõe indicadores econômicos da facção do jogador para a UI
-          const facaoJogador = gameState.playerFaction === 'PARAGUAI' ? 'PARAGUAI' : 'BRASIL';
-          const econ = estado.facoes[facaoJogador as keyof typeof estado.facoes]?.estadoEconomico;
-          if (econ) {
-            setEconomicIndicators({
-              pib: econ.pib,
-              pibCrescimento: econ.pibCrescimento,
-              inflacao: econ.inflacao,
-              desemprego: econ.desemprego,
-              dividaPublica: econ.dividaPublica,
-              reservasInternacionais: econ.reservasInternacionais,
-            });
-          }
-        }
-      });
-
-      gameLoopRef.current = loop;
-      loop.iniciar();
-    }
-
-    if (gameState.timelineProgress !== 'GUERRA' && gameLoopRef.current) {
-      gameLoopRef.current.pausar();
-      gameLoopRef.current = null;
-      simStateRef.current = null;
+    if (gameState.timelineProgress === 'GUERRA') {
+      engineManager.start(gameState);
+    } else {
+      engineManager.stop();
     }
   }, [gameState.timelineProgress]);
 
   // Cleanup ao desmontar o provider
   useEffect(() => {
-    return () => {
-      if (gameLoopRef.current) {
-        gameLoopRef.current.pausar();
-      }
-    };
+    return () => engineManager.stop();
   }, []);
 
   // Geração assíncrona de eventos pelo Gemini — dispara quando advanceTurn sinaliza
@@ -481,7 +423,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       // Aplicar modificadores climáticos (motor real-time)
       const zonaClimatica = regiaoParaZonaClimatica(battle.regionId);
-      const clima = simStateRef.current?.climaGlobal[zonaClimatica];
+      const clima = engineManager.getSimState()?.climaGlobal[zonaClimatica];
       let weatherDesc = '';
       if (clima) {
         // Visibilidade reduzida prejudica mais o atacante (avança em terreno desconhecido)
@@ -1131,8 +1073,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       // 1. Coleta automática de recursos por região para a facção controladora
       // com modificadores macroeconômicos do motor real-time (EconomySystem)
-      const simEconBrasil = simStateRef.current?.facoes['BRASIL']?.estadoEconomico ?? null;
-      const simEconParaguai = simStateRef.current?.facoes['PARAGUAI']?.estadoEconomico ?? null;
+      const simEconBrasil = engineManager.getSimState()?.facoes['BRASIL']?.estadoEconomico ?? null;
+      const simEconParaguai = engineManager.getSimState()?.facoes['PARAGUAI']?.estadoEconomico ?? null;
 
       Object.values(updatedRegions).forEach((region: Region) => {
         const leaderFaction = region.controller;
@@ -1945,8 +1887,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
   return (
     <GameContext.Provider value={{
       gameState,
-      weatherState,
-      economicIndicators,
       pendingEventGeneration,
       startGame,
       resetGame,
